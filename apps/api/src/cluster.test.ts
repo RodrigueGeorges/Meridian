@@ -6,11 +6,14 @@ import { startSims } from '@meridian/sim';
 import { pg } from '@meridian/store-pg';
 import { buildServer } from './server.ts';
 
-const dbUrl = process.env.DATABASE_URL;
+const baseUrl = process.env.DATABASE_URL;
+// Schéma dédié : n'interfère pas avec les autres tests PostgreSQL lancés en parallèle.
+const SCHEMA = 'cluster_test';
+const dbUrl = baseUrl && `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}options=${encodeURIComponent(`-c search_path=${SCHEMA}`)}`;
 const KEY = 'mk_test_cluster0123456789abcdef';
 const H = { authorization: `Bearer ${KEY}`, 'content-type': 'application/json' };
 
-describe.skipIf(!dbUrl)('Cluster PostgreSQL : deux instances d’API', () => {
+describe.skipIf(!baseUrl)('Cluster PostgreSQL : deux instances d’API', () => {
   let sims: Awaited<ReturnType<typeof startSims>>;
   const hooks: { body: string; sig: string }[] = [];
   let hookSrv: http.Server;
@@ -35,8 +38,8 @@ describe.skipIf(!dbUrl)('Cluster PostgreSQL : deux instances d’API', () => {
   };
 
   beforeAll(async () => {
-    const p = new pg.Pool({ connectionString: dbUrl });
-    await p.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
+    const p = new pg.Pool({ connectionString: baseUrl });
+    await p.query(`DROP SCHEMA IF EXISTS ${SCHEMA} CASCADE; CREATE SCHEMA ${SCHEMA};`);
     await p.end();
     hookSrv = http.createServer((req, res) => {
       let b = '';
