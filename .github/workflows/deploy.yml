@@ -1,0 +1,28 @@
+name: deploy-demo
+# Déploie la démo (simulateurs + API + portail) sur Fly.io, région Paris, après une CI verte sur main.
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    concurrency: deploy-demo
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - run: flyctl deploy --config infra/fly/sim.toml --remote-only
+      - run: flyctl deploy --config infra/fly/api.toml --remote-only
+      - name: Test de fumée
+        run: |
+          sleep 10
+          curl -fsS https://meridian-api-demo.fly.dev/health
+          curl -fsS -X POST https://meridian-api-demo.fly.dev/v1/payments \
+            -H "authorization: Bearer ${{ secrets.DEMO_API_KEY }}" -H "content-type: application/json" \
+            -d "{\"posId\":\"pos_demo_FR\",\"reference\":\"SMOKE-${{ github.run_id }}\",\"amount\":100,\"currency\":\"EUR\",\"waitMs\":8000}" | grep -q authorized

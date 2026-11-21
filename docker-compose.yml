@@ -1,0 +1,43 @@
+# Environnement local complet : PostgreSQL + simulateurs PSP + API avec portail.
+# docker compose up --build   →   portail : http://localhost:8080/portal/  (clé : mk_test_demo0123456789abcdef)
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: meridian
+      POSTGRES_PASSWORD: meridian
+      POSTGRES_DB: meridian
+    ports: ["5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U meridian"]
+      interval: 3s
+      retries: 20
+    volumes: [pgdata:/var/lib/postgresql/data]
+
+  sim:
+    build: .
+    command: ["pnpm", "sim"]
+    ports: ["12111:12111", "12112:12112"]
+
+  api:
+    build: .
+    depends_on:
+      db: { condition: service_healthy }
+      sim: { condition: service_started }
+    ports: ["8080:8080", "8888:8888", "20007:20007"]
+    environment:
+      CONCERT_PORT: "8888"
+      CONCERT_POS_MAP: "01=pos_demo_FR"
+      ZVT_PORT: "20007"
+      ZVT_POS: pos_demo_DE
+      DATABASE_URL: postgres://meridian:meridian@db:5432/meridian
+      JOURNAL_KEY: local-journal-key-0123456789
+      MASTER_KEY: local-master-key-0123456789abcdef0123456789
+      BOOTSTRAP_API_KEY: mk_test_demo0123456789abcdef
+      ALLOW_TEST_BASE_URL: "true"
+      DEMO_SEED: "true"
+      SIM_STRIPE_URL: http://sim:12111
+      SIM_SECOURS_URL: http://sim:12112
+
+volumes:
+  pgdata:

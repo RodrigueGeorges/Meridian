@@ -1,0 +1,47 @@
+{
+  "id": "psp-secours",
+  "name": "PSP de secours (API cloud générique, démo)",
+  "version": "1.0.0",
+  "kind": "acceptance_and_acquiring",
+  "baseUrl": "http://localhost:12112",
+  "config": [{ "key": "apiKey", "type": "string", "secret": true, "label": "Clé API" }],
+  "auth": { "header": "Authorization", "value": "Bearer {{config.apiKey}}" },
+  "encoding": "json",
+  "idempotency": { "header": "X-Idempotency-Key" },
+  "pay": {
+    "steps": [
+      {
+        "id": "checkout",
+        "method": "POST",
+        "path": "/checkouts",
+        "body": { "amount": "{{tx.amount}}", "currency": "{{tx.currency}}", "reference": "{{tx.reference}}" },
+        "save": { "checkoutId": "id" }
+      }
+    ]
+  },
+  "status": {
+    "sources": { "c": { "method": "GET", "path": "/checkouts/{{vars.checkoutId}}" } },
+    "rules": [
+      { "when": [{ "path": "c.status", "equals": "SUCCESSFUL" }], "state": "authorized" },
+      { "when": [{ "path": "c.status", "equals": "FAILED" }], "state": "declined", "detailPath": "c.reason" },
+      { "when": [{ "path": "c.status", "equals": "CANCELLED" }], "state": "cancelled" }
+    ]
+  },
+  "cancel": { "method": "DELETE", "path": "/checkouts/{{vars.checkoutId}}", "busyCodes": ["checkout_processing"] },
+  "refund": {
+    "method": "POST",
+    "path": "/refunds",
+    "body": { "checkout": "{{vars.checkoutId}}", "amount": "{{refund.amount}}" }
+  },
+  "health": { "method": "GET", "path": "/health" },
+  "receipt": { "brand": "c.card.brand", "last4": "c.card.last4" },
+  "capabilities": {
+    "countries": ["FR", "BE", "NL", "DE", "ES", "IT", "AT", "CH"],
+    "currencies": ["EUR", "CHF"],
+    "paymentMethods": { "*": ["visa", "mastercard"], "FR": ["cb"], "BE": ["bancontact"], "DE": ["girocard"], "CH": ["twint"] },
+    "partialRefund": true,
+    "cancelDuringAuth": false,
+    "languages": ["fr", "en", "de", "es", "it", "nl"],
+    "compatProtocols": []
+  }
+}

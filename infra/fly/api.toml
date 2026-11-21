@@ -1,0 +1,50 @@
+# API Meridian — région principale Paris, données dans l'UE.
+# fly launch --config infra/fly/api.toml --no-deploy ; fly secrets set DATABASE_URL=… JOURNAL_KEY=… MASTER_KEY=… BOOTSTRAP_API_KEY=…
+app = "meridian-api-demo"
+primary_region = "cdg"
+
+[build]
+  dockerfile = "../../Dockerfile"
+
+[env]
+  PORT = "8080"
+  ALLOW_TEST_BASE_URL = "true"
+  DEMO_SEED = "true"
+  SIM_STRIPE_URL = "http://meridian-sim-demo.internal:12111"
+  SIM_SECOURS_URL = "http://meridian-sim-demo.internal:12112"
+  SCAN_MS = "3000"
+  CONCERT_PORT = "8888"
+  CONCERT_POS_MAP = "01=pos_demo_FR"
+  ZVT_PORT = "20007"
+  ZVT_POS = "pos_demo_DE"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "off"
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "15s"
+    method = "GET"
+    path = "/health"
+    timeout = "3s"
+
+# Passerelles caisse en TCP brut (réservé aux tests : en production, tunnel privé ou WireGuard côté magasin).
+[[services]]
+  internal_port = 8888
+  protocol = "tcp"
+  [[services.ports]]
+    port = 8888
+
+[[services]]
+  internal_port = 20007
+  protocol = "tcp"
+  [[services.ports]]
+    port = 20007
+
+# Multi-instance : fly scale count 2 --region cdg (coordination par PostgreSQL, rien d'autre à configurer).
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

@@ -1,0 +1,37 @@
+{
+  "name": "meridian",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:unit": "vitest run packages",
+    "conformance": "vitest run conformance",
+    "sim": "tsx apps/sim/src/main.ts",
+    "api": "tsx apps/api/src/main.ts",
+    "migrate": "tsx packages/store-pg/src/migrate.ts",
+    "dev": "concurrently -n sim,api \"pnpm sim\" \"pnpm api\"",
+    "sandbox": "node tools/sandbox-check/meridian-sandbox-test.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/pg": "^8.11.10",
+    "concurrently": "^9.1.0",
+    "fast-check": "^3.23.1",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "dependencies": {
+    "tsx": "^4.19.2",
+    "@meridian/core": "workspace:*",
+    "@meridian/modules": "workspace:*",
+    "@meridian/engine": "workspace:*",
+    "@meridian/sim": "workspace:*",
+    "@meridian/store-pg": "workspace:*",
+    "@meridian/bridges": "workspace:*"
+  }
+}

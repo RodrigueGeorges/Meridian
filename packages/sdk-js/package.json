@@ -1,0 +1,9 @@
+{
+  "name": "@meridian/sdk",
+  "version": "0.1.0",
+  "description": "SDK Meridian : un seul code pour encaisser avec toutes les solutions de paiement, sur caisse, borne ou kiosque.",
+  "type": "module",
+  "license": "UNLICENSED",
+  "exports": { ".": "./src/index.ts" },
+  "files": ["src"]
+}

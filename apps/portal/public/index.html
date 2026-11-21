@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meridian · Portail</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="#catalog"><svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="12" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 4C8.5 9.5 8.5 22.5 16 28" fill="none" stroke="#7FE3C8" stroke-width="2" stroke-linecap="round"/></svg>Meridian</a>
+  <nav aria-label="Sections">
+    <a href="#catalog" data-i18n="nav.catalog">Catalogue</a>
+    <a href="#pos" data-i18n="nav.pos">Points de vente</a>
+    <a href="#payments" data-i18n="nav.payments">Paiements</a>
+    <a href="#kiosk" data-i18n="nav.kiosk">Borne de démo</a>
+    <a href="#settings" data-i18n="nav.settings">Clé API</a>
+  </nav>
+  <label class="lang"><span class="sr" data-i18n="lang">Langue</span>
+    <select id="lang"><option value="fr">FR</option><option value="en">EN</option><option value="de">DE</option><option value="es">ES</option><option value="it">IT</option><option value="nl">NL</option></select>
+  </label>
+</header>
+
+<main>
+  <div id="notice" class="notice" role="status" hidden></div>
+
+  <section id="v-catalog" class="view">
+    <h1 data-i18n="catalog.title">Catalogue des solutions de paiement</h1>
+    <p class="lead" data-i18n="catalog.lead">Filtrez par pays pour voir les solutions disponibles et leurs moyens de paiement locaux.</p>
+    <div class="row"><label for="catCountry" data-i18n="field.country">Pays</label><select id="catCountry"></select></div>
+    <div id="catList" class="cards"></div>
+  </section>
+
+  <section id="v-pos" class="view" hidden>
+    <h1 data-i18n="pos.title">Points de vente</h1>
+    <form id="posForm" class="panel">
+      <h2 data-i18n="pos.new">Nouveau point de vente</h2>
+      <div class="grid2">
+        <label><span data-i18n="field.label">Nom</span><input id="posLabel" required maxlength="80"></label>
+        <label><span data-i18n="field.country">Pays</span><select id="posCountry"></select></label>
+      </div>
+      <button class="primary" data-i18n="action.create">Créer</button>
+    </form>
+    <div id="posList" class="list"></div>
+    <form id="routeForm" class="panel" hidden>
+      <h2><span data-i18n="pos.routing">Brancher une solution</span> · <span id="routePos"></span></h2>
+      <div class="grid2">
+        <label><span data-i18n="pos.primary">Solution principale</span><select id="primarySel"></select></label>
+        <label><span data-i18n="pos.fallback">Solution de secours</span><select id="fallbackSel"></select></label>
+      </div>
+      <div id="primaryFields" class="grid2"></div>
+      <div id="fallbackFields" class="grid2"></div>
+      <button class="primary" data-i18n="action.plug">Brancher</button>
+    </form>
+  </section>
+
+  <section id="v-payments" class="view" hidden>
+    <h1 data-i18n="payments.title">Paiements</h1>
+    <div class="row"><label for="payPos" data-i18n="field.pos">Point de vente</label><select id="payPos"></select><button id="verifyBtn" data-i18n="payments.verify">Vérifier le journal</button><span id="verifyOut" class="mono"></span></div>
+    <div class="scroll"><table class="tbl"><thead><tr><th data-i18n="field.reference">Référence</th><th data-i18n="field.amount">Montant</th><th data-i18n="field.state">État</th><th data-i18n="field.module">Solution</th></tr></thead><tbody id="payRows"></tbody></table></div>
+    <div id="journal" class="panel" hidden><h2 data-i18n="payments.journal">Journal signé</h2><ol id="journalList" class="mono jl"></ol></div>
+  </section>
+
+  <section id="v-kiosk" class="view" hidden>
+    <h1 data-i18n="kiosk.title">Borne de démo</h1>
+    <div class="kiosk">
+      <div class="panel">
+        <label><span data-i18n="field.pos">Point de vente</span><select id="kPos"></select></label>
+        <label><span data-i18n="field.amount">Montant</span><input id="kAmount" type="number" min="0.5" step="0.5" value="24.50" inputmode="decimal"></label>
+        <div class="row"><button class="primary" id="kPay" data-i18n="action.pay">Payer</button><button id="kCancel" data-i18n="action.cancel" disabled>Annuler</button></div>
+      </div>
+      <div class="screen" id="kScreen"><div class="big" id="kState" data-i18n="state.ready">Prête</div><div class="small" id="kDetail"></div></div>
+    </div>
+  </section>
+
+  <section id="v-settings" class="view" hidden>
+    <h1 data-i18n="settings.title">Clé API</h1>
+    <form id="keyForm" class="panel">
+      <label><span data-i18n="settings.key">Clé Meridian (mk_test_…)</span><input id="apiKey" autocomplete="off" spellcheck="false"></label>
+      <button class="primary" data-i18n="action.save">Enregistrer</button>
+      <p class="small" data-i18n="settings.note">La clé reste dans cet onglet du navigateur.</p>
+    </form>
+  </section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>

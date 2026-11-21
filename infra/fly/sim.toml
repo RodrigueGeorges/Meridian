@@ -1,0 +1,16 @@
+# Simulateurs PSP de démo (réseau privé Fly uniquement, pas d'exposition publique).
+app = "meridian-sim-demo"
+primary_region = "cdg"
+
+[build]
+  dockerfile = "../../Dockerfile"
+
+[experimental]
+  cmd = ["pnpm", "sim"]
+
+[env]
+  SIM_HOST = "::"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

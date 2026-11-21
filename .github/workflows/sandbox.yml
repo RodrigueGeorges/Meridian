@@ -1,0 +1,28 @@
+name: sandbox-stripe
+# Conformité contre la sandbox Stripe réelle, dans chacun des 6 pays de lancement.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * *"
+
+jobs:
+  sandbox:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        country: [FR, BE, NL, DE, ES, IT]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Scénarios réels (clé de test uniquement)
+        env:
+          STRIPE_KEY: ${{ secrets.STRIPE_TEST_KEY }}
+          COUNTRY: ${{ matrix.country }}
+        run: node tools/sandbox-check/meridian-sandbox-test.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rapport-sandbox-${{ matrix.country }}
+          path: rapport-sandbox-*.md

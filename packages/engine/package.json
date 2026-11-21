@@ -1,0 +1,8 @@
+{
+  "name": "@meridian/engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": { "@meridian/core": "workspace:*", "@meridian/modules": "workspace:*" }
+}
