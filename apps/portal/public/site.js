@@ -49,6 +49,7 @@
     renderCoverage();
     renderTicket(lastRun);
     setMode();
+    startFeed();
   }
 
   // ---------- Navigation ----------
@@ -65,7 +66,7 @@
     window.scrollTo(0, 0);
     if (location.hash) $('main').focus({ preventScroll: true });
   }
-  window.addEventListener('hashchange', route);
+  window.addEventListener('hashchange', () => (document.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches ? document.startViewTransition(route) : route()));
   window.addEventListener('scroll', () => document.querySelector('.hd').classList.toggle('scrolled', scrollY > 8), { passive: true });
 
   // ---------- Couverture par pays ----------
@@ -95,6 +96,79 @@
       d.append(b, p);
       return d;
     }));
+  }
+
+
+  // ---------- Vue produit animée (accueil) ----------
+  const FEED = [
+    ['Paris', 'Caisse 2', 'FR', 'CB', 'Stripe', 2450, 'EUR', 'authorized'],
+    ['Berlin', 'Kiosk 1', 'DE', 'girocard', 'Stripe', 1290, 'EUR', 'authorized'],
+    ['Bruxelles', 'Borne 4', 'BE', 'Bancontact', 'Secours', 840, 'EUR', 'authorized'],
+    ['Zürich', 'Kasse 3', 'CH', 'TWINT', 'Secours', 1900, 'CHF', 'authorized'],
+    ['Milano', 'Cassa 1', 'IT', 'PagoBancomat', 'Stripe', 520, 'EUR', 'declined'],
+    ['Madrid', 'TPV 6', 'ES', 'Bizum', 'Stripe', 3100, 'EUR', 'authorized'],
+    ['Lyon', 'Borne 1', 'FR', 'CB', 'Stripe', 1150, 'EUR', 'authorized'],
+    ['Utrecht', 'Kassa 2', 'NL', 'Wero', 'Secours', 675, 'EUR', 'authorized'],
+  ];
+  const pill = (st) => { const p = document.createElement('span'); const m = { authorized: 'ok', declined: 'no', pending: 'run' }[st]; p.className = `pill ${m}`; p.textContent = t(`state.${st}`); return p; };
+  function row(f, state) {
+    const tr = document.createElement('tr');
+    const a = document.createElement('td'); a.append(f[0]); const sub = document.createElement('span'); sub.className = 'sub'; sub.textContent = f[1]; a.append(sub);
+    const b = document.createElement('td'); b.textContent = f[3];
+    const c = document.createElement('td'); c.textContent = f[4];
+    const d = document.createElement('td'); d.className = 'r'; d.textContent = money(f[5], f[6]);
+    const e = document.createElement('td'); e.append(pill(state));
+    tr.append(a, b, c, d, e);
+    return tr;
+  }
+  let feedTimer = 0; let sideTimers = [];
+  function startFeed() {
+    const body = $('appRows');
+    if (!body) return;
+    clearInterval(feedTimer); sideTimers.forEach(clearTimeout); sideTimers = [];
+    body.replaceChildren(...FEED.slice(0, 6).map((f) => row(f, f[7])));
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const log = $('sideLog');
+    const steps = [[0, 'j.created', ''], [10, 'j.step.process', ''], [510, 'j.net.status', 'warn'], [2920, 'j.final.authorized', 'ok']];
+    const line = (ms, k, cls) => { const li = document.createElement('li'); li.className = cls; const x = document.createElement('span'); x.textContent = sec(ms); const y = document.createElement('span'); y.textContent = t(k); li.append(x, y); return li; };
+    if (reduce) {
+      log.replaceChildren(...steps.map((s) => line(...s)));
+      $('sideDebits').textContent = '1'; $('sideProof').textContent = `✓ ${t('mt.ok')}`;
+      return;
+    }
+    let i = 6;
+    const cycle = () => {
+      log.replaceChildren(); $('sideDebits').textContent = '0'; $('sideProof').innerHTML = '&nbsp;';
+      steps.forEach(([ms, k, cls], n) => sideTimers.push(setTimeout(() => {
+        log.append(line(ms, k, cls));
+        if (n === steps.length - 1) { $('sideDebits').textContent = '1'; $('sideProof').textContent = `✓ ${t('mt.ok')}`; }
+      }, 400 + n * 1100)));
+    };
+    cycle();
+    feedTimer = setInterval(() => {
+      const f = FEED[i++ % FEED.length];
+      const tr = row(f, 'pending'); tr.classList.add('new');
+      body.prepend(tr);
+      while (body.children.length > 6) body.lastElementChild.remove();
+      sideTimers.push(setTimeout(() => { tr.lastElementChild.replaceChildren(pill(f[7])); }, 1300));
+      if (i % 4 === 0) { sideTimers.forEach(clearTimeout); sideTimers = []; cycle(); }
+    }, 2200);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) clearInterval(feedTimer); else startFeed(); }, { once: true });
+  }
+
+  // ---------- Onglets de code ----------
+  function initCode() {
+    const tabs = document.querySelectorAll('.code-tabs [data-code]');
+    tabs.forEach((b) => b.addEventListener('click', () => {
+      tabs.forEach((x) => x.setAttribute('aria-selected', String(x === b)));
+      for (const k of ['sdk', 'rest', 'nexo']) $(`code-${k}`).hidden = k !== b.dataset.code;
+    }));
+    $('copyCode')?.addEventListener('click', async (ev) => {
+      const vis = [...document.querySelectorAll('.codebox pre')].find((p) => !p.hidden);
+      try { await navigator.clipboard.writeText(vis.innerText); ev.target.textContent = t('code.copied'); }
+      catch { ev.target.textContent = '—'; }
+      setTimeout(() => { ev.target.textContent = t('code.copy'); }, 1600);
+    });
   }
 
   // ---------- Démo ----------
@@ -221,6 +295,7 @@
   document.addEventListener('DOMContentLoaded', () => {
     $('lang').addEventListener('change', (ev) => { store.set('meridian.lang', ev.target.value); void load(ev.target.value); });
     $('run').addEventListener('click', () => void runDemo());
+    initCode();
     route();
     void load(pickLang());
   });

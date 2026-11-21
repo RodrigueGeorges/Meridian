@@ -32,7 +32,7 @@
           <option value="es">ES</option><option value="it">IT</option><option value="nl">NL</option>
         </select>
       </label>
-      <a class="btn-s" href="console.html" data-i18n="nav.console">Se connecter</a>
+      <a class="btn-s" href="console.html" data-i18n="nav.console">Se connecter</a><a class="btn btn-sm" href="#demo" data-i18n="nav.cta">Démo</a>
     </div>
   </div>
 </header>
@@ -41,99 +41,117 @@
 
 <!-- ============ ACCUEIL ============ -->
 <section class="view" data-view="home">
-  <div class="wrap hero">
-    <div class="hero-txt">
-      <p class="eyebrow" data-i18n="home.eyebrow">Connecteur de paiement pour éditeurs de caisses et de bornes</p>
-      <h1 class="display" data-i18n-html="home.title">Tous les PSP dans votre caisse.<br><span class="hl">Une seule intégration.</span></h1>
-      <p class="lede" data-i18n="home.lede">Meridian relie toute caisse ou borne à tout fournisseur de paiement en Europe. Chaque paiement est tracé, repris s'il est coupé, et prouvable.</p>
-      <div class="ctas">
-        <a class="btn" href="#demo" data-i18n="home.cta">Voir la démo en direct</a>
-        <a class="btn ghost" href="#software" data-i18n="home.cta2">Intégrer Meridian</a>
-      </div>
-      <ul class="assur">
-        <li data-i18n="assur.1">Fonds jamais détenus</li>
-        <li data-i18n="assur.2">Aucun numéro de carte stocké</li>
-        <li data-i18n="assur.3">Journal chaîné et signé</li>
-      </ul>
+  <div class="wrap hero-c">
+    <p class="eyebrow-pill reveal"><span class="dot"></span><span data-i18n="home.eyebrow">Orchestration de paiement pour caisses et bornes</span></p>
+    <h1 class="display reveal" data-i18n-html="home.title">Une API pour connecter votre caisse à <span class="hl">tous les PSP d'Europe.</span></h1>
+    <p class="lede reveal" data-i18n="home.lede">Pour les éditeurs de logiciels de caisse et de bornes. Vos marchands gardent leur PSP, vous intégrez une seule fois, et chaque paiement est garanti sans double débit, même quand le réseau coupe.</p>
+    <div class="ctas reveal">
+      <a class="btn" href="#demo" data-i18n="home.cta">Voir la démo en direct</a>
+      <a class="btn ghost" href="https://github.com/RodrigueGeorges/Meridian#readme" data-i18n="home.cta2">Lire la documentation</a>
     </div>
-
-    <!-- Vue produit composée : la console multi-pays et le ticket de preuve -->
-    <div class="hero-vis" aria-hidden="true">
-      <div class="ui">
-        <div class="ui-bar"><span class="ui-logo"></span><span class="mono" data-i18n="ui.title">Paiements · aujourd'hui</span><span class="ui-live mono" data-i18n="ui.live">En direct</span></div>
-        <table class="ui-tbl mono">
-          <tr><td>FR</td><td>CB</td><td class="r">24,50 €</td><td><span class="pill ok" data-i18n="state.authorized">Payé</span></td></tr>
-          <tr><td>DE</td><td>girocard</td><td class="r">12,90 €</td><td><span class="pill ok" data-i18n="state.authorized">Payé</span></td></tr>
-          <tr><td>BE</td><td>Bancontact</td><td class="r">8,40 €</td><td><span class="pill run" data-i18n="state.pending">En cours</span></td></tr>
-          <tr><td>CH</td><td>TWINT</td><td class="r">CHF 19.00</td><td><span class="pill ok" data-i18n="state.authorized">Payé</span></td></tr>
-          <tr><td>IT</td><td>PagoBancomat</td><td class="r">5,20 €</td><td><span class="pill no" data-i18n="state.declined">Refusé</span></td></tr>
-          <tr><td>ES</td><td>Bizum</td><td class="r">31,00 €</td><td><span class="pill ok" data-i18n="state.authorized">Payé</span></td></tr>
-        </table>
-      </div>
-      <div class="mini-ticket">
-        <p class="mono mt-k">MERIDIAN · T-1042</p>
-        <p class="mt-a">24,50 €</p>
-        <p class="mono mt-l"><span data-i18n="mt.net">Réseau coupé</span><span>+0,51 s</span></p>
-        <p class="mono mt-l"><span data-i18n="mt.resume">Reprise</span><span>+2,92 s</span></p>
-        <p class="mt-d"><span class="mono" data-i18n="demo.debits">Débits</span><b>1</b></p>
-        <p class="mono mt-h" data-i18n="mt.ok">Journal vérifié · SHA-256</p>
-      </div>
-    </div>
+    <p class="micro reveal" data-i18n="home.micro">Sans inscription · moteur réel · 30 secondes</p>
   </div>
 
+  <!-- Vue produit animée -->
   <div class="wrap">
-    <div class="compat">
-      <p data-i18n="compat.h">Compatible avec les standards de caisse et les moyens de paiement locaux d'Europe</p>
-      <ul class="mono"><li>Concert</li><li>ZVT</li><li>nexo</li><li>Stripe Terminal</li><li>CB</li><li>Bancontact</li><li>girocard</li><li>TWINT</li><li>Bizum</li><li>PagoBancomat</li></ul>
+    <div class="app" aria-hidden="true">
+      <div class="app-bar">
+        <span class="lights"><i></i><i></i><i></i></span>
+        <span class="app-tabs"><b data-i18n="app.tab1">Paiements</b><span data-i18n="app.tab2">Points de vente</span><span data-i18n="app.tab3">Journal</span></span>
+        <span class="app-live mono" data-i18n="ui.live">En direct</span>
+      </div>
+      <div class="app-body">
+        <table class="app-tbl">
+          <thead><tr><th data-i18n="app.c1">Point de vente</th><th data-i18n="app.c2">Moyen</th><th data-i18n="app.c3">PSP</th><th class="r" data-i18n="app.c4">Montant</th><th data-i18n="app.c5">Statut</th></tr></thead>
+          <tbody id="appRows"></tbody>
+        </table>
+        <aside class="app-side">
+          <p class="side-k" data-i18n="app.side">Paiement T-1042</p>
+          <ol class="side-log mono" id="sideLog"></ol>
+          <div class="side-foot"><span data-i18n="demo.debits">Débits</span><b id="sideDebits">0</b></div>
+          <p class="side-proof mono" id="sideProof">&nbsp;</p>
+        </aside>
+      </div>
     </div>
   </div>
 
-  <div class="wrap section doors">
-    <a class="door" href="#software">
-      <span class="door-k" data-i18n="doors.sw.k">Éditeurs de caisses et de bornes</span>
-      <span class="door-h" data-i18n="doors.sw.h">Ne perdez plus une vente à cause du PSP du marchand.</span>
-      <span class="door-p" data-i18n="doors.sw.p">Un SDK, cinq appels, tous les PSP du catalogue. Vos caisses Concert, ZVT ou nexo fonctionnent sans réécriture.</span>
-      <span class="door-l" data-i18n="doors.more">En savoir plus</span>
-    </a>
-    <a class="door alt" href="#psp">
-      <span class="door-k" data-i18n="doors.psp.k">PSP et acquéreurs</span>
-      <span class="door-h" data-i18n="doors.psp.h">Soyez dans toutes les caisses, sans intégration de plus.</span>
-      <span class="door-p" data-i18n="doors.psp.p">Publiez un module une fois ; il est disponible chez chaque éditeur connecté. Vous gardez le contrat, le KYC, les fonds et la commission.</span>
-      <span class="door-l" data-i18n="doors.more">En savoir plus</span>
-    </a>
+  <div class="wrap trust">
+    <ul class="trust-facts">
+      <li><b data-i18n="trust.1.h">Aucun fonds détenu</b><span data-i18n="trust.1.p">Les fonds vont du PSP au marchand, sans passer par nous.</span></li>
+      <li><b data-i18n="trust.2.h">Aucune donnée de carte</b><span data-i18n="trust.2.p">Le terminal et le PSP gardent la carte ; Meridian ne voit que les 4 derniers chiffres.</span></li>
+      <li><b data-i18n="trust.3.h">Journal signé et vérifiable</b><span data-i18n="trust.3.p">Chaque étape est chaînée (SHA-256) et signée avant d'être envoyée.</span></li>
+    </ul>
+    <div class="compat"><p data-i18n="compat.h">Compatible avec</p><ul class="mono"><li>Concert</li><li>ZVT</li><li>nexo</li><li>Stripe Terminal</li><li>CB</li><li>Bancontact</li><li>girocard</li><li>TWINT</li><li>Bizum</li><li>PagoBancomat</li></ul></div>
   </div>
 
   <div class="wrap section">
-    <div class="sec-head center">
-      <p class="eyebrow" data-i18n="stats.eyebrow">Fiabilité mesurée</p>
-      <h2 data-i18n="stats.h">Des garanties testées, pas promises.</h2>
+    <div class="sec-head reveal">
+      <p class="eyebrow" data-i18n="pb.eyebrow">Le problème</p>
+      <h2 data-i18n="pb.h">Aujourd'hui, chaque PSP est un projet d'intégration.</h2>
     </div>
-    <dl class="stats">
-      <div><dd>5</dd><dt data-i18n="stats.k1">appels d'API pour tout le catalogue</dt></div>
-      <div><dd>8</dd><dt data-i18n="stats.k2">scénarios de panne vérifiés à chaque version</dt></div>
-      <div><dd class="hl">0</dd><dt data-i18n="stats.k3">double débit sur 200 séquences de pannes aléatoires</dt></div>
-    </dl>
-    <p class="note center" data-i18n="stats.note">Résultats de la suite de tests ouverte, sur simulateurs PSP fidèles aux API. Validation en sandbox réelle en cours.</p>
+    <div class="pains">
+      <article class="reveal"><p class="pain" data-i18n="pb.1.a">Un marchand arrive avec son PSP. Vous ne l'avez pas intégré : la vente est perdue, ou c'est trois mois de développement et une certification.</p><p class="fix" data-i18n="pb.1.b">Avec Meridian, le PSP est dans le catalogue. Vous le choisissez dans la console, sans une ligne de code.</p></article>
+      <article class="reveal"><p class="pain" data-i18n="pb.2.a">Le réseau coupe pendant l'autorisation. La caisse affiche « échec », le client repaie, et vous gérez le litige de double débit.</p><p class="fix" data-i18n="pb.2.b">Meridian garde le paiement « en cours », retrouve l'issue réelle chez le PSP, et ne débite qu'une fois.</p></article>
+      <article class="reveal"><p class="pain" data-i18n="pb.3.a">Vous ouvrez l'Allemagne ou la Belgique. Nouveaux protocoles, nouveaux moyens de paiement locaux, nouveau projet.</p><p class="fix" data-i18n="pb.3.b">ZVT, nexo, girocard, Bancontact, TWINT : déjà pris en charge, pays par pays.</p></article>
+    </div>
   </div>
 
-  <div class="wrap section" id="how">
-    <div class="sec-head">
+  <div class="wrap section split">
+    <div class="reveal">
+      <p class="eyebrow" data-i18n="code.eyebrow">Intégration</p>
+      <h2 data-i18n="code.h">Cinq appels. Le même code pour tous les PSP.</h2>
+      <p data-i18n="code.p">Payer, consulter l'état, annuler, rembourser, obtenir le reçu. Le SDK gère les rejeux, les délais et les réponses perdues. Changer de PSP, c'est changer un réglage, pas votre code.</p>
+      <a class="link" href="https://github.com/RodrigueGeorges/Meridian#readme" data-i18n="code.more">Référence de l'API →</a>
+    </div>
+    <div class="codebox reveal">
+      <div class="code-tabs" role="tablist" aria-label="Exemples">
+        <button role="tab" aria-selected="true" data-code="sdk">SDK</button>
+        <button role="tab" aria-selected="false" data-code="rest">REST</button>
+        <button role="tab" aria-selected="false" data-code="nexo">nexo</button>
+        <button class="copy" type="button" id="copyCode" data-i18n="code.copy">Copier</button>
+      </div>
+<pre class="code mono" id="code-sdk"><code><span class="c">// npm i @meridian/sdk</span>
+<span class="k">const</span> m = <span class="k">new</span> Meridian({ apiKey, posId: <span class="s">'pos_paris_01'</span> });
+
+<span class="k">await</span> m.pay({ reference: <span class="s">'T-1042'</span>, amount: <span class="n">2450</span>, currency: <span class="s">'EUR'</span> });
+<span class="k">const</span> p = <span class="k">await</span> m.waitForFinal(<span class="s">'T-1042'</span>);
+<span class="c">// p.state → 'authorized' · 1 débit, même si le réseau a coupé</span></code></pre>
+<pre class="code mono" id="code-rest" hidden><code>curl https://api.meridian.example/v1/payments \
+  -H <span class="s">"Authorization: Bearer mk_test_…"</span> \
+  -d <span class="s">'{"posId":"pos_paris_01","reference":"T-1042",</span>
+<span class="s">       "amount":2450,"currency":"EUR"}'</span>
+
+<span class="c"># → 201 {"state":"pending"}  puis  GET …/T-1042?waitMs=10000</span></code></pre>
+<pre class="code mono" id="code-nexo" hidden><code><span class="c">// Caisse nexo existante : seule l'adresse change</span>
+POST /v1/nexo
+{ <span class="s">"SaleToPOIRequest"</span>: {
+    <span class="s">"MessageHeader"</span>: { <span class="s">"MessageCategory"</span>: <span class="s">"Payment"</span>, <span class="s">"POIID"</span>: <span class="s">"pos_paris_01"</span> },
+    <span class="s">"PaymentRequest"</span>: { <span class="s">"PaymentTransaction"</span>: {
+        <span class="s">"AmountsReq"</span>: { <span class="s">"Currency"</span>: <span class="s">"EUR"</span>, <span class="s">"RequestedAmount"</span>: <span class="n">24.50</span> } } } } }</code></pre>
+    </div>
+  </div>
+
+  <div class="wrap section">
+    <div class="sec-head reveal">
       <p class="eyebrow" data-i18n="how.eyebrow">Comment ça marche</p>
-      <h2 data-i18n="how.h">Une règle simple : écrire avant d'agir.</h2>
+      <h2 data-i18n="how.h">Meridian écrit chaque étape avant de l'envoyer.</h2>
     </div>
-    <ol class="steps">
-      <li><span class="step-n mono">01</span><h3 data-i18n="how.s1.h">La caisse appelle Meridian</h3><p data-i18n="how.s1.p">Un seul appel « payer », quel que soit le PSP derrière. Même référence, même résultat, même en cas de double envoi.</p></li>
-      <li><span class="step-n mono">02</span><h3 data-i18n="how.s2.h">Meridian écrit, puis envoie</h3><p data-i18n="how.s2.p">Chaque étape est inscrite dans un journal chaîné et signé avant d'être envoyée au PSP, avec une clé d'idempotence par étape.</p></li>
-      <li><span class="step-n mono">03</span><h3 data-i18n="how.s3.h">L'issue est garantie et prouvable</h3><p data-i18n="how.s3.p">En cas de coupure, Meridian reprend depuis le journal et retrouve l'issue réelle. Chaque paiement se termine par une preuve vérifiable.</p></li>
-    </ol>
+    <figure class="flow reveal" aria-labelledby="flowcap">
+      <div class="node"><span class="mono" data-i18n="flow.k1">Votre caisse</span><b data-i18n="flow.n1">SDK, Concert, ZVT, nexo</b></div>
+      <div class="edge"><span class="mono">pay()</span></div>
+      <div class="node core"><span class="mono">Meridian</span><b data-i18n="flow.n2">Journal signé, reprise, relais</b><small data-i18n="flow.n2s">une clé d'idempotence par étape</small></div>
+      <div class="edge"><span class="mono" data-i18n="flow.e2">API du PSP</span></div>
+      <div class="node stack"><span class="mono" data-i18n="flow.k3">PSP du marchand</span><b data-i18n="flow.n3">Principal</b><b class="sec" data-i18n="flow.n4">Secours, si rien n'a été envoyé</b></div>
+      <figcaption id="flowcap" data-i18n="flow.cap">Le paiement ne quitte jamais Meridian sans être inscrit au journal. En cas de coupure, la reprise part du journal, pas d'une supposition.</figcaption>
+    </figure>
   </div>
 
   <div class="wrap section">
-    <div class="sec-head">
+    <div class="sec-head reveal">
       <p class="eyebrow" data-i18n="guar.eyebrow">Résilience</p>
       <h2 data-i18n="guar.h">Ce qui arrive quand ça casse.</h2>
     </div>
-    <div class="panel">
+    <div class="panel reveal">
     <table class="guar">
       <thead><tr><th scope="col" data-i18n="guar.c1">Incident</th><th scope="col" data-i18n="guar.c2">Ce que fait Meridian</th><th scope="col" data-i18n="guar.c3">Résultat</th></tr></thead>
       <tbody>
@@ -144,34 +162,42 @@
         <tr><th scope="row" data-i18n="guar.r5.a">L'annulation arrive trop tard</th><td data-i18n="guar.r5.b">Renvoie l'issue réelle et permet le remboursement</td><td><span class="pill mono" data-i18n="guar.r5.c">Issue réelle</span></td></tr>
       </tbody>
     </table>
+    <p class="panel-foot"><b data-i18n="guar.stat">0 double débit sur 200 séquences de pannes aléatoires, à chaque version.</b> <span data-i18n="stats.note">Résultats de la suite de tests ouverte, sur simulateurs PSP fidèles aux API. Validation en sandbox réelle en cours.</span></p>
+    </div>
+  </div>
+
+  <div class="wrap section doors">
+    <a class="door reveal" href="#software">
+      <span class="door-k" data-i18n="doors.sw.k">Éditeurs de caisses et de bornes</span>
+      <span class="door-h" data-i18n="doors.sw.h">Ne perdez plus une vente à cause du PSP du marchand.</span>
+      <span class="door-p" data-i18n="doors.sw.p">Un SDK, cinq appels, tous les PSP du catalogue. Vos caisses Concert, ZVT ou nexo fonctionnent sans réécriture.</span>
+      <span class="door-l" data-i18n="doors.more">En savoir plus</span>
+    </a>
+    <a class="door alt reveal" href="#psp">
+      <span class="door-k" data-i18n="doors.psp.k">PSP et acquéreurs</span>
+      <span class="door-h" data-i18n="doors.psp.h">Soyez dans toutes les caisses, sans intégration de plus.</span>
+      <span class="door-p" data-i18n="doors.psp.p">Publiez un module une fois ; il est disponible chez chaque éditeur connecté. Vous gardez le contrat, le KYC, les fonds et la commission.</span>
+      <span class="door-l" data-i18n="doors.more">En savoir plus</span>
+    </a>
+  </div>
+
+  <div class="wrap section">
+    <div class="sec-head reveal">
+      <p class="eyebrow" data-i18n="faq.eyebrow">Questions fréquentes</p>
+      <h2 data-i18n="faq.h">Ce que les équipes paiement nous demandent.</h2>
+    </div>
+    <div class="faq">
+      <details><summary data-i18n="faq.1.q">Meridian est-il un établissement de paiement ?</summary><p data-i18n="faq.1.a">Non. Meridian est un prestataire technique : il ne détient pas de fonds et ne signe pas de contrat avec les marchands. Les paiements sont exécutés par le PSP choisi par le marchand, sous son propre agrément.</p></details>
+      <details><summary data-i18n="faq.2.q">Les données de carte passent-elles par Meridian ?</summary><p data-i18n="faq.2.a">Non. La carte est lue par le terminal et traitée par le PSP. Meridian ne reçoit que le résultat, la marque et les 4 derniers chiffres pour le ticket.</p></details>
+      <details><summary data-i18n="faq.3.q">Que se passe-t-il si Meridian tombe ?</summary><p data-i18n="faq.3.a">Plusieurs instances partagent le même journal. Si l'une tombe en plein paiement, une autre reprend depuis la dernière étape écrite et retrouve l'issue réelle chez le PSP. Le test est public.</p></details>
+      <details><summary data-i18n="faq.4.q">Mes caisses Concert ou ZVT doivent-elles changer ?</summary><p data-i18n="faq.4.a">Non. Vous pointez la caisse vers Meridian au lieu du terminal ; les messages restent les mêmes.</p></details>
+      <details><summary data-i18n="faq.5.q">Quels PSP sont disponibles ?</summary><p data-i18n="faq.5.a">Stripe Terminal aujourd'hui, en sandbox. Chaque nouveau PSP arrive sous forme de module déclaratif, publié après avoir passé les huit scénarios de panne.</p></details>
+      <details><summary data-i18n="faq.6.q">Qui paie, et comment ?</summary><p data-i18n="faq.6.a">L'éditeur, par terminal actif et par mois, comme un outil de son logiciel. Le marchand ne paie rien de plus à Meridian ; sa commission reste chez son PSP.</p></details>
     </div>
   </div>
 
   <div class="wrap section">
-    <div class="sec-head">
-      <p class="eyebrow" data-i18n="ind.eyebrow">Secteurs</p>
-      <h2 data-i18n="ind.h">Partout où l'on paie sans caissier, ou avec.</h2>
-    </div>
-    <div class="ind">
-      <div><h3 data-i18n="ind.1.h">Restauration rapide</h3><p data-i18n="ind.1.p">Bornes de commande et caisses, un seul branchement pour toutes les enseignes franchisées.</p></div>
-      <div><h3 data-i18n="ind.2.h">Commerce de détail</h3><p data-i18n="ind.2.p">Le marchand garde son PSP ; l'éditeur garde la vente.</p></div>
-      <div><h3 data-i18n="ind.3.h">Parking et mobilité</h3><p data-i18n="ind.3.p">Bornes isolées, réseau instable : la reprise garantie fait la différence.</p></div>
-      <div><h3 data-i18n="ind.4.h">Recharge électrique</h3><p data-i18n="ind.4.p">Pré-autorisation, montant final, preuve de chaque session.</p></div>
-      <div><h3 data-i18n="ind.5.h">Hôtellerie et loisirs</h3><p data-i18n="ind.5.p">Plusieurs pays, plusieurs PSP, une seule intégration.</p></div>
-      <div><h3 data-i18n="ind.6.h">Distribution automatique</h3><p data-i18n="ind.6.p">Petits montants, gros volumes, zéro litige de double débit.</p></div>
-    </div>
-  </div>
-
-  <div class="wrap section">
-    <div class="neutral">
-      <p class="eyebrow" data-i18n="neutral.eyebrow">Neutralité</p>
-      <p class="statement" data-i18n="neutral.h">Le PSP garde le contrat, le KYC, les fonds et la commission. Meridian ne touche jamais l'argent.</p>
-      <p class="lede" data-i18n="neutral.p">Une couche technique neutre : aucun PSP n'en est propriétaire, aucun n'est mis en avant. Le marchand garde le choix.</p>
-    </div>
-  </div>
-
-  <div class="wrap section">
-    <div class="closing">
+    <div class="closing reveal">
       <h2 data-i18n="close.h">Voyez Meridian gérer une panne en direct, en 30 secondes.</h2>
       <div class="ctas"><a class="btn light" href="#demo" data-i18n="home.cta">Voir la démo en direct</a><a class="btn ghost-l" href="https://github.com/RodrigueGeorges/Meridian#readme" data-i18n="close.docs">Documentation développeurs</a></div>
     </div>
