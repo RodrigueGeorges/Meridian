@@ -54,11 +54,12 @@
   // ---------- Navigation ----------
   const VIEWS = ['home', 'software', 'psp', 'demo'];
   function route() {
-    const v = (location.hash.match(/^#\/(\w+)/) ?? [])[1] ?? 'home';
+    const v = (location.hash.match(/^#\/?(\w+)/) ?? [])[1] ?? 'home';
+    if (location.hash && !VIEWS.includes(v)) return; // ancre interne (ex. lien d'évitement) : pas de changement de vue
     const view = VIEWS.includes(v) ? v : 'home';
     for (const s of document.querySelectorAll('.view')) s.hidden = s.dataset.view !== view;
     for (const a of document.querySelectorAll('.nav a')) {
-      if (a.getAttribute('href') === `#/${view}`) a.setAttribute('aria-current', 'page');
+      if (a.getAttribute('href') === `#${view}`) a.setAttribute('aria-current', 'page');
       else a.removeAttribute('aria-current');
     }
     window.scrollTo(0, 0);
