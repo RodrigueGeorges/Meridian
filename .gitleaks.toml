@@ -1,0 +1,11 @@
+# Règles gitleaks par défaut + valeurs factices de démo et de test (motif « 0123456789 »).
+# Une vraie clé (sk_live_, sk_test_ Stripe, etc.) reste détectée.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Clés factices de démo et de tests"
+regexes = [
+  '''mk_test_[a-z0-9]*0123456789(abcdef)?''',
+  '''[a-z0-9-]+-(journal|master)-key-0123456789(abcdef0123456789)?''',
+]
