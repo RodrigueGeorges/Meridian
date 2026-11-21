@@ -44,10 +44,14 @@ STRIPE_KEY=sk_test_… COUNTRY=DE pnpm sandbox   # sandbox Stripe réelle, par p
 | `packages/sdk-js` | SDK caisse : `pay`, `status`, `cancel`, `refund`, `receipt`, `waitForFinal` |
 | `apps/api` | API REST + worker intégré + portail statique |
 | `apps/sim` | Simulateurs PSP fidèles aux API, injection de pannes (`POST /__faults`) |
-| `apps/portal` | Portail en 6 langues : catalogue par pays, points de vente, paiements, borne de démo |
+| `apps/portal` | Site public en 6 langues (`/portal/` : accueil, éditeurs, PSP, démo « Essayez de le casser ») et console (`/portal/console.html`) ; polices auto-hébergées |
 | `conformance` | 8 scénarios de la spec + test de propriétés |
 | `tools/sandbox-check` | Test contre la sandbox Stripe réelle, par pays |
 | `infra`, `.github/workflows` | Docker, Fly.io (Paris), CI, sandbox nocturne, déploiement |
+
+## Démo publique
+
+`POST /v1/demo/run` (mode démo uniquement, 12 essais par minute et par IP) lance un vrai paiement sur le moteur et injecte une vraie panne dans le simulateur PSP : `nominal`, `network`, `lost_response`, `declined`. La réponse contient le journal, le nombre de débits mesuré côté PSP et la vérification de la chaîne. Hors ligne, le site rejoue une exécution réelle enregistrée (`demo-recorded.json`).
 
 ## Passerelles caisse existantes
 

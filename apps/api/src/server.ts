@@ -181,6 +181,51 @@ export async function buildServer(o: ServerOptions) {
     return pos;
   };
 
+  // ---------- Démo publique « Essayez de le casser » (mode démo uniquement) ----------
+  // Vraies pannes injectées dans le simulateur PSP, vrai moteur, vrai journal ; une exécution à la fois.
+  if (o.demoSeed) {
+    const seed = o.demoSeed;
+    let queue: Promise<unknown> = Promise.resolve();
+    const hits = new Map<string, number[]>();
+    const simDebits = async () => {
+      const [a, b] = await Promise.all([seed.stripeUrl, seed.secoursUrl].map((u) => fetch(`${u}/__state`).then((r) => r.json() as Promise<{ debits: number }>)));
+      return a!.debits + b!.debits;
+    };
+    const faults = (body: Record<string, unknown>) =>
+      fetch(`${seed.stripeUrl}/__faults`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    const SCENARIOS = ['nominal', 'network', 'lost_response', 'declined'] as const;
+    app.post('/v1/demo/run', async (req, reply) => {
+      const { scenario, amount } = z.object({ scenario: z.enum(SCENARIOS), amount: z.number().int().min(100).max(50_000).default(2450) }).parse(req.body ?? {});
+      const now = Date.now();
+      const recent = (hits.get(req.ip) ?? []).filter((t) => now - t < 60_000);
+      if (recent.length >= 12) return reply.code(429).send({ error: { code: 'rate_limited', message: 'Trop de démos, réessayez dans une minute' } });
+      hits.set(req.ip, [...recent, now]);
+      const run = async () => {
+        const posId = 'pos_demo_FR';
+        const reference = `DEMO-${now.toString(36)}-${randomBytes(3).toString('hex')}`.toUpperCase();
+        await faults({ dropResponse: {}, netDownUntil: 0, declineNext: false, autoPresentMs: 400, authMs: 600 });
+        if (scenario === 'declined') await faults({ declineNext: true });
+        if (scenario === 'lost_response') await faults({ dropResponse: { process_payment_intent: 1 } });
+        const before = await simDebits();
+        const t0 = Date.now();
+        await engine.pay({ posId, reference, amount, currency: 'EUR' });
+        if (scenario === 'network') {
+          await new Promise((r) => setTimeout(r, 250));
+          await faults({ netDownUntil: Date.now() + 2500 });
+        }
+        const fin = await engine.waitForFinal(posId, reference, 20_000);
+        await new Promise((r) => setTimeout(r, 400)); // laisse arriver un éventuel débit tardif
+        const debits = (await simDebits()) - before;
+        await faults({ dropResponse: {}, netDownUntil: 0, declineNext: false, autoPresentMs: 150, authMs: 250 });
+        const journal = (await store.byReference(posId, reference)).map((e) => ({ seq: e.seq, ms: Date.parse(e.ts) - t0, type: e.type, hash: e.hash, prev: e.prev, data: e.data }));
+        return { scenario, reference, amount, currency: 'EUR', state: fin.state, detail: fin.detail ?? null, debits, durationMs: Date.now() - t0, journal, verified: (await engine.verify()).ok };
+      };
+      const p = queue.then(run, run);
+      queue = p.catch(() => undefined);
+      return p;
+    });
+  }
+
   // ---------- Routes publiques ----------
   app.get('/health', async () => ({ ok: true, journal: (await engine.verify()).ok }));
   app.get('/v1/modules', async () => Object.values(BUILTIN_MODULES).map((m) => ({

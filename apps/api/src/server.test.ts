@@ -60,6 +60,20 @@ for (const mode of ['memory', 'postgres'] as const) {
       expect(sims.stripe.state.refunds.size).toBe(1);
     });
 
+    it('démo publique : vraies pannes injectées, un seul débit, journal vérifié', async () => {
+      const run = async (scenario: string) => (await fetch(`${base}/v1/demo/run`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ scenario }) })).json();
+      for (const scenario of ['network', 'lost_response']) {
+        const r = await run(scenario);
+        expect(r.state).toBe('authorized');
+        expect(r.debits).toBe(1);
+        expect(r.verified).toBe(true);
+        expect(r.journal.some((e: { type: string }) => e.type === 'network_error')).toBe(true);
+      }
+      const d = await run('declined');
+      expect([d.state, d.debits]).toEqual(['declined', 0]);
+      expect((await fetch(`${base}/v1/demo/run`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"scenario":"rm -rf"}' })).status).toBe(400);
+    });
+
     it('bascule vers le secours quand Stripe est injoignable', async () => {
       await sims.stopStripe();
       const m = new Meridian({ apiKey: KEY, posId: 'pos_demo_NL', baseUrl: base });

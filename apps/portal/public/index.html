@@ -1,88 +1,311 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Meridian · Portail</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap">
-<link rel="stylesheet" href="styles.css">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Meridian</title>
+<meta name="description" content="">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23D9481E'/%3E%3Crect x='15' y='5' width='2' height='22' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="preload" href="fonts/instrument-sans-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="fonts.css">
+<link rel="stylesheet" href="site.css">
 </head>
 <body>
-<header class="top">
-  <a class="brand" href="#catalog"><svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="12" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 4C8.5 9.5 8.5 22.5 16 28" fill="none" stroke="#7FE3C8" stroke-width="2" stroke-linecap="round"/></svg>Meridian</a>
-  <nav aria-label="Sections">
-    <a href="#catalog" data-i18n="nav.catalog">Catalogue</a>
-    <a href="#pos" data-i18n="nav.pos">Points de vente</a>
-    <a href="#payments" data-i18n="nav.payments">Paiements</a>
-    <a href="#kiosk" data-i18n="nav.kiosk">Borne de démo</a>
-    <a href="#settings" data-i18n="nav.settings">Clé API</a>
-  </nav>
-  <label class="lang"><span class="sr" data-i18n="lang">Langue</span>
-    <select id="lang"><option value="fr">FR</option><option value="en">EN</option><option value="de">DE</option><option value="es">ES</option><option value="it">IT</option><option value="nl">NL</option></select>
-  </label>
+<a class="skip" href="#main" data-i18n="a11y.skip">Aller au contenu</a>
+
+<header class="hd">
+  <div class="wrap hd-in">
+    <a class="logo" href="#/" aria-label="Meridian">
+      <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true"><rect width="20" height="20" fill="var(--accent)"/><rect x="9.25" y="3" width="1.5" height="14" fill="#fff"/></svg>
+      <span>Meridian</span>
+    </a>
+    <nav class="nav" aria-label="Navigation">
+      <a href="#/software" data-i18n="nav.software">Éditeurs</a>
+      <a href="#/psp" data-i18n="nav.psp">PSP</a>
+      <a href="#/demo" data-i18n="nav.demo">Démo</a>
+      <a href="https://github.com/RodrigueGeorges/Meridian#readme" data-i18n="nav.docs">Développeurs</a>
+    </nav>
+    <div class="hd-end">
+      <label class="lang"><span class="sr" data-i18n="a11y.lang">Langue</span>
+        <select id="lang">
+          <option value="fr">FR</option><option value="en">EN</option><option value="de">DE</option>
+          <option value="es">ES</option><option value="it">IT</option><option value="nl">NL</option>
+        </select>
+      </label>
+      <a class="btn-s" href="console.html" data-i18n="nav.console">Se connecter</a>
+    </div>
+  </div>
 </header>
 
-<main>
-  <div id="notice" class="notice" role="status" hidden></div>
+<main id="main" tabindex="-1">
 
-  <section id="v-catalog" class="view">
-    <h1 data-i18n="catalog.title">Catalogue des solutions de paiement</h1>
-    <p class="lead" data-i18n="catalog.lead">Filtrez par pays pour voir les solutions disponibles et leurs moyens de paiement locaux.</p>
-    <div class="row"><label for="catCountry" data-i18n="field.country">Pays</label><select id="catCountry"></select></div>
-    <div id="catList" class="cards"></div>
-  </section>
-
-  <section id="v-pos" class="view" hidden>
-    <h1 data-i18n="pos.title">Points de vente</h1>
-    <form id="posForm" class="panel">
-      <h2 data-i18n="pos.new">Nouveau point de vente</h2>
-      <div class="grid2">
-        <label><span data-i18n="field.label">Nom</span><input id="posLabel" required maxlength="80"></label>
-        <label><span data-i18n="field.country">Pays</span><select id="posCountry"></select></label>
+<!-- ============ ACCUEIL ============ -->
+<section class="view" data-view="home">
+  <div class="wrap hero">
+    <div class="hero-txt">
+      <p class="eyebrow" data-i18n="home.eyebrow">Infrastructure de paiement pour caisses et bornes</p>
+      <h1 class="display" data-i18n-html="home.title">Un branchement.<br>Tous les paiements.<br><span class="hl">Jamais deux fois.</span></h1>
+      <p class="lede" data-i18n="home.lede">Meridian relie toute caisse ou borne à tout fournisseur de paiement en Europe. Chaque paiement est tracé, repris s'il est coupé, et prouvable.</p>
+      <div class="ctas">
+        <a class="btn" href="#/demo" data-i18n="home.cta">Essayez de le casser</a>
+        <a class="btn ghost" href="#/software" data-i18n="home.cta2">Intégrer Meridian</a>
       </div>
-      <button class="primary" data-i18n="action.create">Créer</button>
-    </form>
-    <div id="posList" class="list"></div>
-    <form id="routeForm" class="panel" hidden>
-      <h2><span data-i18n="pos.routing">Brancher une solution</span> · <span id="routePos"></span></h2>
-      <div class="grid2">
-        <label><span data-i18n="pos.primary">Solution principale</span><select id="primarySel"></select></label>
-        <label><span data-i18n="pos.fallback">Solution de secours</span><select id="fallbackSel"></select></label>
-      </div>
-      <div id="primaryFields" class="grid2"></div>
-      <div id="fallbackFields" class="grid2"></div>
-      <button class="primary" data-i18n="action.plug">Brancher</button>
-    </form>
-  </section>
-
-  <section id="v-payments" class="view" hidden>
-    <h1 data-i18n="payments.title">Paiements</h1>
-    <div class="row"><label for="payPos" data-i18n="field.pos">Point de vente</label><select id="payPos"></select><button id="verifyBtn" data-i18n="payments.verify">Vérifier le journal</button><span id="verifyOut" class="mono"></span></div>
-    <div class="scroll"><table class="tbl"><thead><tr><th data-i18n="field.reference">Référence</th><th data-i18n="field.amount">Montant</th><th data-i18n="field.state">État</th><th data-i18n="field.module">Solution</th></tr></thead><tbody id="payRows"></tbody></table></div>
-    <div id="journal" class="panel" hidden><h2 data-i18n="payments.journal">Journal signé</h2><ol id="journalList" class="mono jl"></ol></div>
-  </section>
-
-  <section id="v-kiosk" class="view" hidden>
-    <h1 data-i18n="kiosk.title">Borne de démo</h1>
-    <div class="kiosk">
-      <div class="panel">
-        <label><span data-i18n="field.pos">Point de vente</span><select id="kPos"></select></label>
-        <label><span data-i18n="field.amount">Montant</span><input id="kAmount" type="number" min="0.5" step="0.5" value="24.50" inputmode="decimal"></label>
-        <div class="row"><button class="primary" id="kPay" data-i18n="action.pay">Payer</button><button id="kCancel" data-i18n="action.cancel" disabled>Annuler</button></div>
-      </div>
-      <div class="screen" id="kScreen"><div class="big" id="kState" data-i18n="state.ready">Prête</div><div class="small" id="kDetail"></div></div>
+      <ul class="assur">
+        <li data-i18n="assur.1">Fonds jamais détenus</li>
+        <li data-i18n="assur.2">Aucun numéro de carte stocké</li>
+        <li data-i18n="assur.3">Journal chaîné et signé</li>
+      </ul>
     </div>
-  </section>
 
-  <section id="v-settings" class="view" hidden>
-    <h1 data-i18n="settings.title">Clé API</h1>
-    <form id="keyForm" class="panel">
-      <label><span data-i18n="settings.key">Clé Meridian (mk_test_…)</span><input id="apiKey" autocomplete="off" spellcheck="false"></label>
-      <button class="primary" data-i18n="action.save">Enregistrer</button>
-      <p class="small" data-i18n="settings.note">La clé reste dans cet onglet du navigateur.</p>
-    </form>
-  </section>
+    <!-- Vue produit composée : la console multi-pays et le ticket de preuve -->
+    <div class="hero-vis" aria-hidden="true">
+      <div class="ui">
+        <div class="ui-bar"><span class="ui-logo"></span><span class="mono" data-i18n="ui.title">Paiements · aujourd'hui</span><span class="ui-live mono" data-i18n="ui.live">En direct</span></div>
+        <table class="ui-tbl mono">
+          <tr><td>FR</td><td>CB</td><td class="r">24,50 €</td><td><span class="pill ok" data-i18n="state.authorized">Payé</span></td></tr>
+          <tr><td>DE</td><td>girocard</td><td class="r">12,90 €</td><td><span class="pill ok" data-i18n="state.authorized">Payé</span></td></tr>
+          <tr><td>BE</td><td>Bancontact</td><td class="r">8,40 €</td><td><span class="pill run" data-i18n="state.pending">En cours</span></td></tr>
+          <tr><td>CH</td><td>TWINT</td><td class="r">CHF 19.00</td><td><span class="pill ok" data-i18n="state.authorized">Payé</span></td></tr>
+          <tr><td>IT</td><td>PagoBancomat</td><td class="r">5,20 €</td><td><span class="pill no" data-i18n="state.declined">Refusé</span></td></tr>
+          <tr><td>ES</td><td>Bizum</td><td class="r">31,00 €</td><td><span class="pill ok" data-i18n="state.authorized">Payé</span></td></tr>
+        </table>
+      </div>
+      <div class="mini-ticket">
+        <p class="mono mt-k">MERIDIAN · T-1042</p>
+        <p class="mt-a">24,50 €</p>
+        <p class="mono mt-l"><span data-i18n="mt.net">Réseau coupé</span><span>+0,51 s</span></p>
+        <p class="mono mt-l"><span data-i18n="mt.resume">Reprise</span><span>+2,92 s</span></p>
+        <p class="mt-d"><span class="mono" data-i18n="demo.debits">Débits</span><b>1</b></p>
+        <p class="mono mt-h" data-i18n="mt.ok">Journal vérifié · SHA-256</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="compat">
+      <p data-i18n="compat.h">Compatible avec les standards de caisse et les moyens de paiement locaux d'Europe</p>
+      <ul class="mono"><li>Concert</li><li>ZVT</li><li>nexo</li><li>Stripe Terminal</li><li>CB</li><li>Bancontact</li><li>girocard</li><li>TWINT</li><li>Bizum</li><li>PagoBancomat</li></ul>
+    </div>
+  </div>
+
+  <div class="wrap section doors">
+    <a class="door" href="#/software">
+      <span class="door-k" data-i18n="doors.sw.k">Éditeurs de caisses et de bornes</span>
+      <span class="door-h" data-i18n="doors.sw.h">Ne perdez plus une vente à cause du PSP du marchand.</span>
+      <span class="door-p" data-i18n="doors.sw.p">Un SDK, cinq appels, tous les PSP du catalogue. Vos caisses Concert, ZVT ou nexo fonctionnent sans réécriture.</span>
+      <span class="door-l" data-i18n="doors.more">En savoir plus</span>
+    </a>
+    <a class="door alt" href="#/psp">
+      <span class="door-k" data-i18n="doors.psp.k">PSP et acquéreurs</span>
+      <span class="door-h" data-i18n="doors.psp.h">Soyez dans toutes les caisses, sans intégration de plus.</span>
+      <span class="door-p" data-i18n="doors.psp.p">Publiez un module une fois ; il est disponible chez chaque éditeur connecté. Vous gardez le contrat, le KYC, les fonds et la commission.</span>
+      <span class="door-l" data-i18n="doors.more">En savoir plus</span>
+    </a>
+  </div>
+
+  <div class="wrap section">
+    <div class="sec-head center">
+      <p class="eyebrow" data-i18n="stats.eyebrow">Fiabilité mesurée</p>
+      <h2 data-i18n="stats.h">Des garanties testées, pas promises.</h2>
+    </div>
+    <dl class="stats">
+      <div><dd>5</dd><dt data-i18n="stats.k1">appels d'API pour tout le catalogue</dt></div>
+      <div><dd>8</dd><dt data-i18n="stats.k2">scénarios de panne vérifiés à chaque version</dt></div>
+      <div><dd class="hl">0</dd><dt data-i18n="stats.k3">double débit sur 200 séquences de pannes aléatoires</dt></div>
+    </dl>
+    <p class="note center" data-i18n="stats.note">Résultats de la suite de tests ouverte, sur simulateurs PSP fidèles aux API. Validation en sandbox réelle en cours.</p>
+  </div>
+
+  <div class="wrap section" id="how">
+    <div class="sec-head">
+      <p class="eyebrow" data-i18n="how.eyebrow">Comment ça marche</p>
+      <h2 data-i18n="how.h">Une règle simple : écrire avant d'agir.</h2>
+    </div>
+    <ol class="steps">
+      <li><span class="step-n mono">01</span><h3 data-i18n="how.s1.h">La caisse appelle Meridian</h3><p data-i18n="how.s1.p">Un seul appel « payer », quel que soit le PSP derrière. Même référence, même résultat, même en cas de double envoi.</p></li>
+      <li><span class="step-n mono">02</span><h3 data-i18n="how.s2.h">Meridian écrit, puis envoie</h3><p data-i18n="how.s2.p">Chaque étape est inscrite dans un journal chaîné et signé avant d'être envoyée au PSP, avec une clé d'idempotence par étape.</p></li>
+      <li><span class="step-n mono">03</span><h3 data-i18n="how.s3.h">L'issue est garantie et prouvable</h3><p data-i18n="how.s3.p">En cas de coupure, Meridian reprend depuis le journal et retrouve l'issue réelle. Chaque paiement se termine par une preuve vérifiable.</p></li>
+    </ol>
+  </div>
+
+  <div class="wrap section">
+    <div class="sec-head">
+      <p class="eyebrow" data-i18n="guar.eyebrow">Résilience</p>
+      <h2 data-i18n="guar.h">Ce qui arrive quand ça casse.</h2>
+    </div>
+    <div class="panel">
+    <table class="guar">
+      <thead><tr><th scope="col" data-i18n="guar.c1">Incident</th><th scope="col" data-i18n="guar.c2">Ce que fait Meridian</th><th scope="col" data-i18n="guar.c3">Résultat</th></tr></thead>
+      <tbody>
+        <tr><th scope="row" data-i18n="guar.r1.a">Le réseau coupe pendant l'autorisation</th><td data-i18n="guar.r1.b">Garde le paiement « en cours », jamais « échoué », et interroge le PSP</td><td><span class="pill ok mono" data-i18n="guar.one">1 débit</span></td></tr>
+        <tr><th scope="row" data-i18n="guar.r2.a">La réponse du PSP se perd</th><td data-i18n="guar.r2.b">Rejoue avec la même clé d'idempotence</td><td><span class="pill ok mono" data-i18n="guar.one">1 débit</span></td></tr>
+        <tr><th scope="row" data-i18n="guar.r3.a">Le serveur tombe en plein paiement</th><td data-i18n="guar.r3.b">Une autre instance reprend depuis le journal partagé</td><td><span class="pill ok mono" data-i18n="guar.one">1 débit</span></td></tr>
+        <tr><th scope="row" data-i18n="guar.r4.a">Le PSP principal est injoignable</th><td data-i18n="guar.r4.b">Bascule vers le PSP de secours, seulement si rien n'a été envoyé</td><td><span class="pill ok mono" data-i18n="guar.one">1 débit</span></td></tr>
+        <tr><th scope="row" data-i18n="guar.r5.a">L'annulation arrive trop tard</th><td data-i18n="guar.r5.b">Renvoie l'issue réelle et permet le remboursement</td><td><span class="pill mono" data-i18n="guar.r5.c">Issue réelle</span></td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+
+  <div class="wrap section">
+    <div class="sec-head">
+      <p class="eyebrow" data-i18n="ind.eyebrow">Secteurs</p>
+      <h2 data-i18n="ind.h">Partout où l'on paie sans caissier, ou avec.</h2>
+    </div>
+    <div class="ind">
+      <div><h3 data-i18n="ind.1.h">Restauration rapide</h3><p data-i18n="ind.1.p">Bornes de commande et caisses, un seul branchement pour toutes les enseignes franchisées.</p></div>
+      <div><h3 data-i18n="ind.2.h">Commerce de détail</h3><p data-i18n="ind.2.p">Le marchand garde son PSP ; l'éditeur garde la vente.</p></div>
+      <div><h3 data-i18n="ind.3.h">Parking et mobilité</h3><p data-i18n="ind.3.p">Bornes isolées, réseau instable : la reprise garantie fait la différence.</p></div>
+      <div><h3 data-i18n="ind.4.h">Recharge électrique</h3><p data-i18n="ind.4.p">Pré-autorisation, montant final, preuve de chaque session.</p></div>
+      <div><h3 data-i18n="ind.5.h">Hôtellerie et loisirs</h3><p data-i18n="ind.5.p">Plusieurs pays, plusieurs PSP, une seule intégration.</p></div>
+      <div><h3 data-i18n="ind.6.h">Distribution automatique</h3><p data-i18n="ind.6.p">Petits montants, gros volumes, zéro litige de double débit.</p></div>
+    </div>
+  </div>
+
+  <div class="wrap section">
+    <div class="neutral">
+      <p class="eyebrow" data-i18n="neutral.eyebrow">Neutralité</p>
+      <p class="statement" data-i18n="neutral.h">Le PSP garde le contrat, le KYC, les fonds et la commission. Meridian ne touche jamais l'argent.</p>
+      <p class="lede" data-i18n="neutral.p">Une couche technique neutre : aucun PSP n'en est propriétaire, aucun n'est mis en avant. Le marchand garde le choix.</p>
+    </div>
+  </div>
+
+  <div class="wrap section">
+    <div class="closing">
+      <h2 data-i18n="close.h">Voyez-le résister à une panne en 30 secondes.</h2>
+      <div class="ctas"><a class="btn light" href="#/demo" data-i18n="home.cta">Essayez de le casser</a><a class="btn ghost-l" href="https://github.com/RodrigueGeorges/Meridian#readme" data-i18n="close.docs">Documentation développeurs</a></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ÉDITEURS ============ -->
+<section class="view" data-view="software" hidden>
+  <div class="wrap hero hero-sub">
+    <p class="eyebrow" data-i18n="sw.eyebrow">Pour les éditeurs de caisses et de bornes</p>
+    <h1 class="display-s" data-i18n="sw.title">Ne perdez plus une vente à cause du PSP du marchand.</h1>
+    <p class="lede" data-i18n="sw.lede">Chaque marchand arrive avec son PSP. Chaque PSP coûte une intégration, une certification et de la maintenance. Avec Meridian, vous intégrez une fois et proposez tout le catalogue.</p>
+  </div>
+  <div class="wrap section split">
+    <div>
+      
+      <h2 data-i18n="sw.api.h">Cinq appels. Pas un de plus.</h2>
+      <p data-i18n="sw.api.p">payer, état, annuler, rembourser, reçu. Le SDK gère les rejeux, les délais et les réponses perdues. Votre code ne connaît pas le PSP.</p>
+    </div>
+    <pre class="code mono" aria-label="Exemple de code"><code><span class="c">// npm i @meridian/sdk</span>
+const m = new Meridian({ apiKey, posId });
+
+await m.pay({ reference: 'T-1042', amount: 2450, currency: 'EUR' });
+const p = await m.waitForFinal('T-1042');
+<span class="c">// p.state → 'authorized' | 'declined' | 'cancelled'</span>
+const r = await m.receipt('T-1042');   <span class="c">// ticket + preuve</span></code></pre>
+  </div>
+  <div class="wrap section">
+    <div class="sec-head"><h2 data-i18n="sw.proto.h">Vos caisses existantes fonctionnent telles quelles.</h2></div>
+    <div class="panel"><table class="guar">
+      <thead><tr><th scope="col" data-i18n="sw.proto.c1">Protocole</th><th scope="col" data-i18n="sw.proto.c2">Marchés</th><th scope="col" data-i18n="sw.proto.c3">Ce qui change pour vous</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Concert / Caisse-AP</th><td>FR</td><td data-i18n="sw.proto.same">Rien : pointez la caisse vers Meridian</td></tr>
+        <tr><th scope="row">ZVT</th><td>DE · AT · CH</td><td data-i18n="sw.proto.same">Rien : pointez la caisse vers Meridian</td></tr>
+        <tr><th scope="row">nexo Retailer</th><td data-i18n="sw.proto.eu">Europe</td><td data-i18n="sw.proto.same">Rien : pointez la caisse vers Meridian</td></tr>
+        <tr><th scope="row">SDK Meridian</th><td data-i18n="sw.proto.all">Tous</td><td data-i18n="sw.proto.sdk">Cinq appels, toutes les fonctions</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+  <div class="wrap section">
+    <div class="sec-head"><h2 data-i18n="sw.cov.h">Les moyens de paiement locaux, pays par pays.</h2></div>
+    <div class="cov" id="coverage"></div>
+  </div>
+  <div class="wrap"><div class="cta-band">
+    <h2 data-i18n="sw.cta.h">Branchez votre caisse en sandbox.</h2>
+    <div class="ctas"><a class="btn" href="#/demo" data-i18n="sw.cta.b1">Voir la démo de panne</a><a class="link" href="https://github.com/RodrigueGeorges/Meridian#readme" data-i18n="sw.cta.b2">Documentation technique</a></div>
+  </div></div>
+</section>
+
+<!-- ============ PSP ============ -->
+<section class="view" data-view="psp" hidden>
+  <div class="wrap hero hero-sub">
+    <p class="eyebrow" data-i18n="psp.eyebrow">Pour les PSP et les acquéreurs</p>
+    <h1 class="display-s" data-i18n="psp.title">Soyez dans toutes les caisses, sans intégration de plus.</h1>
+    <p class="lede" data-i18n="psp.lede">Pour entrer chez un marchand, il faut être intégré dans sa caisse, éditeur par éditeur, pays par pays. Meridian vous y place en une fois, sans toucher à votre relation client.</p>
+  </div>
+  <div class="wrap section">
+    <div class="sec-head"><h2 data-i18n="psp.keep.h">Vous gardez tout. Nous, seulement le câble.</h2></div>
+    <div class="three">
+      <div><h3 class="mono" data-i18n="psp.keep.a">Reste chez vous</h3><ul><li data-i18n="psp.keep.a1">Contrat marchand</li><li data-i18n="psp.keep.a2">KYC et conformité</li><li data-i18n="psp.keep.a3">Fonds et règlement</li><li data-i18n="psp.keep.a4">Commission</li></ul></div>
+      <div><h3 class="mono" data-i18n="psp.keep.b">Fait par Meridian</h3><ul><li data-i18n="psp.keep.b1">Connexion aux caisses</li><li data-i18n="psp.keep.b2">Journal et reprise</li><li data-i18n="psp.keep.b3">Preuve de chaque paiement</li><li data-i18n="psp.keep.b4">Tests de conformité</li></ul></div>
+      <div><h3 class="mono" data-i18n="psp.keep.c">Jamais fait par Meridian</h3><ul class="no"><li data-i18n="psp.keep.c1">Toucher aux fonds</li><li data-i18n="psp.keep.c2">Signer vos marchands</li><li data-i18n="psp.keep.c3">Stocker un numéro de carte</li><li data-i18n="psp.keep.c4">Favoriser un PSP</li></ul></div>
+    </div>
+  </div>
+  <div class="wrap section split">
+    <div>
+      
+      <h2 data-i18n="psp.mod.h">Un module déclaratif, pas un projet.</h2>
+      <p data-i18n="psp.mod.p">Vous décrivez votre API dans un fichier : étapes, clés d'idempotence, lecture d'état, codes de refus. Aucun code dans le moteur. Le module est refusé s'il ne garantit pas l'idempotence.</p>
+    </div>
+    <pre class="code mono" aria-label="Exemple de module"><code>{
+  "id": "votre-psp",
+  "countries": ["FR", "BE", "DE"],
+  "pay": [
+    { "id": "create", "method": "POST", "path": "/payments",
+      "idempotency": "{reference}:create" }
+  ],
+  "lookup": { "path": "/payments/{vars.id}" },
+  "declineCodes": ["card_declined"]
+}</code></pre>
+  </div>
+  <div class="wrap section">
+    <div class="sec-head"><h2 data-i18n="psp.conf.h">La conformité se prouve, elle ne se déclare pas.</h2></div>
+    <p class="lede" data-i18n="psp.conf.p">Votre module passe les huit scénarios de panne contre votre sandbox : réponse perdue, coupure réseau, crash, annulation tardive. Le rapport est la condition de publication.</p>
+  </div>
+  <div class="wrap"><div class="cta-band">
+    <h2 data-i18n="psp.cta.h">Publiez votre module.</h2>
+    <div class="ctas"><a class="btn" href="#/demo" data-i18n="psp.cta.b1">Voir la démo de panne</a><a class="link" href="https://github.com/RodrigueGeorges/Meridian#readme" data-i18n="psp.cta.b2">Format des modules</a></div>
+  </div></div>
+</section>
+
+<!-- ============ DÉMO ============ -->
+<section class="view" data-view="demo" hidden>
+  <div class="wrap hero hero-sub">
+    <p class="eyebrow" data-i18n="demo.eyebrow">Démo en direct · moteur réel · PSP simulé</p>
+    <h1 class="display-s" data-i18n="demo.title">Essayez de le casser.</h1>
+    <p class="lede" data-i18n="demo.lede">Choisissez une panne. Meridian lance un vrai paiement de 24,50 €, la panne est injectée pendant l'opération, et vous voyez le journal, le nombre de débits et la preuve.</p>
+  </div>
+  <div class="wrap demo">
+    <fieldset class="scen">
+      <legend data-i18n="demo.pick">Choisissez un incident</legend>
+      <label><input type="radio" name="scen" value="network" checked><span><b data-i18n="demo.s.network">Couper le réseau</b><i data-i18n="demo.s.network.d">pendant l'autorisation, 2,5 secondes</i></span></label>
+      <label><input type="radio" name="scen" value="lost_response"><span><b data-i18n="demo.s.lost">Perdre la réponse du PSP</b><i data-i18n="demo.s.lost.d">après que le PSP a accepté l'opération</i></span></label>
+      <label><input type="radio" name="scen" value="declined"><span><b data-i18n="demo.s.declined">Carte refusée</b><i data-i18n="demo.s.declined.d">le PSP refuse le paiement</i></span></label>
+      <label><input type="radio" name="scen" value="nominal"><span><b data-i18n="demo.s.nominal">Aucun incident</b><i data-i18n="demo.s.nominal.d">paiement de référence</i></span></label>
+      <button class="btn" id="run" type="button" data-i18n="demo.run">Lancer le paiement</button>
+      <p class="demo-note" id="demoMode" aria-live="polite"></p>
+    </fieldset>
+
+    <div class="ticket" id="ticket" aria-live="polite">
+      <div class="t-head mono"><span>MERIDIAN</span><span id="tRef">—</span></div>
+      <div class="t-amount"><span id="tAmount">24,50 €</span></div>
+      <div class="t-state"><span class="pill" id="tState" data-i18n="demo.idle">Prêt</span></div>
+      <ol class="t-log mono" id="tLog"></ol>
+      <div class="t-foot">
+        <div><span class="mono" data-i18n="demo.debits">Débits</span><b id="tDebits">—</b></div>
+        <div><span class="mono" data-i18n="demo.time">Durée</span><b id="tTime">—</b></div>
+        <div><span class="mono" data-i18n="demo.proof">Journal</span><b id="tProof">—</b></div>
+      </div>
+      <p class="t-hash mono" id="tHash"></p>
+    </div>
+  </div>
+</section>
+
 </main>
-<script src="app.js"></script>
+
+<footer class="ft">
+  <div class="wrap ft-in">
+    <div class="logo"><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><rect width="20" height="20" fill="var(--accent)"/><rect x="9.25" y="3" width="1.5" height="14" fill="#fff"/></svg><span>Meridian</span></div>
+    <p data-i18n="ft.p">Connecteur de paiement neutre pour caisses et bornes. Europe.</p>
+    <p class="ft-small" data-i18n="ft.legal">Meridian est un prestataire technique : il ne détient pas de fonds, ne conclut pas de contrat avec les marchands et ne stocke pas de numéro de carte complet. Les paiements sont exécutés par les PSP choisis par les marchands. Version de démonstration ; résultats obtenus sur simulateurs PSP.</p>
+  </div>
+</footer>
+
+<script src="site.js"></script>
 </body>
 </html>
