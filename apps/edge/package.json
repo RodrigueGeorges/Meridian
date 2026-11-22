@@ -1,0 +1,20 @@
+{
+  "name": "@meridian/edge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Agent Meridian du magasin : API locale identique à l'API cloud, et relais vers le cloud pour les caisses SaaS.",
+  "type": "module",
+  "exports": {
+    ".": "./src/agent.ts"
+  },
+  "dependencies": {
+    "@meridian/core": "workspace:*",
+    "@meridian/engine": "workspace:*",
+    "@meridian/modules": "workspace:*",
+    "@meridian/terminals": "workspace:*",
+    "ws": "^8"
+  },
+  "devDependencies": {
+    "@types/ws": "^8"
+  }
+}

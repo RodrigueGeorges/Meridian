@@ -1,0 +1,10 @@
+<p class="legal-lede">Every PSP in the catalogue, measured on the real payments that go through Meridian. Figures are recomputed every 30 seconds.</p>
+<section class="st" id="psp-status" data-src="/v1/status" data-l-operational="Operational" data-l-degraded="Degraded" data-l-down="Not responding" data-l-no_data="Not enough payments yet" data-l-24h="Response over 24 h" data-l-90d="Over 90 days" data-l-avg="Average time" data-l-hours="Hourly response rate, last 24 h" data-l-none="No data" data-l-error="Status unavailable right now." data-l-upd="Updated at" data-locale="en-GB">
+<p class="st-empty">The status shows with JavaScript enabled. It is also available as JSON at <code>/v1/status</code>.</p>
+</section>
+<section><h2>How it is measured</h2><ul>
+<li><strong>Response</strong>: the PSP returned an outcome (authorised, declined or cancelled). A card decline is a response: the PSP is working.</li>
+<li><strong>No response</strong>: technical failure, or a switch to the backup PSP because the primary PSP could not be reached.</li>
+<li><strong>Average time</strong>: from payment creation to outcome, card presentation included.</li>
+<li>No volume, amount or merchant is ever published. Below 20 payments in the period, nothing is shown.</li>
+</ul></section>

@@ -13,6 +13,10 @@ COPY packages/sdk-js/package.json packages/sdk-js/
 COPY packages/bridges/package.json packages/bridges/
 COPY apps/api/package.json apps/api/
 COPY apps/sim/package.json apps/sim/
+COPY apps/portal/package.json apps/portal/
+COPY packages/mcp/package.json packages/mcp/
+COPY packages/terminals/package.json packages/terminals/
+COPY apps/edge/package.json apps/edge/
 RUN pnpm install --frozen-lockfile --prod=false
 
 FROM base AS runtime

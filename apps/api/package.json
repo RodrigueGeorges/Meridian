@@ -10,6 +10,7 @@
     "@fastify/compress": "^8",
     "@fastify/helmet": "^13",
     "@fastify/static": "^10.1.12",
+    "@fastify/websocket": "^11",
     "@meridian/bridges": "workspace:*",
     "@meridian/core": "workspace:*",
     "@meridian/engine": "workspace:*",

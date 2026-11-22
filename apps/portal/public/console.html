@@ -4,37 +4,79 @@
 <meta charset="utf-8">
 <meta name="robots" content="noindex">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Meridian · Portail</title>
+<title>Meridian · Console</title>
 <link rel="stylesheet" href="fonts.css">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<header class="top">
-  <a class="brand" href="index.html"><svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="12" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 4C8.5 9.5 8.5 22.5 16 28" fill="none" stroke="#3D47E8" stroke-width="2" stroke-linecap="round"/></svg>Meridian</a>
-  <nav aria-label="Sections">
-    <a href="#catalog" data-i18n="nav.catalog">Catalogue</a>
-    <a href="#pos" data-i18n="nav.pos">Points de vente</a>
+<a class="skip" href="#main" data-i18n="skip">Aller au contenu</a>
+<div class="shell">
+<aside class="side">
+  <a class="brand" href="/"><svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="12" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 4C8.5 9.5 8.5 22.5 16 28" fill="none" stroke="var(--mint)" stroke-width="2" stroke-linecap="round"/><path d="M16 4C23.5 9.5 23.5 22.5 16 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" opacity=".3"/></svg>Meridian<span class="env" id="env" hidden></span></a>
+  <nav aria-label="Console" class="snav">
+    <a href="#overview" data-i18n="nav.overview">Vue d'ensemble</a>
     <a href="#payments" data-i18n="nav.payments">Paiements</a>
+    <a href="#reconcile" data-i18n="nav.reconcile">Rapprochement</a>
+    <a href="#pos" data-i18n="nav.pos">Points de vente</a>
+    <a href="#catalog" data-i18n="nav.catalog">Catalogue</a>
     <a href="#kiosk" data-i18n="nav.kiosk">Borne de démo</a>
     <a href="#settings" data-i18n="nav.settings">Clé API</a>
   </nav>
-  <label class="lang"><span class="sr" data-i18n="lang">Langue</span>
+  <label class="lang"><span data-i18n="lang">Langue</span>
     <select id="lang"><option value="fr">FR</option><option value="en">EN</option><option value="de">DE</option><option value="es">ES</option><option value="it">IT</option><option value="nl">NL</option></select>
   </label>
-</header>
+</aside>
 
-<main>
+<main id="main" tabindex="-1">
   <div id="notice" class="notice" role="status" hidden></div>
 
-  <section id="v-catalog" class="view">
-    <h1 data-i18n="catalog.title">Catalogue des solutions de paiement</h1>
-    <p class="lead" data-i18n="catalog.lead">Filtrez par pays pour voir les solutions disponibles et leurs moyens de paiement locaux.</p>
-    <div class="row"><label for="catCountry" data-i18n="field.country">Pays</label><select id="catCountry"></select></div>
-    <div id="catList" class="cards"></div>
+  <section id="v-overview" class="view">
+    <header class="vh"><h1 data-i18n="ov.title">Vue d'ensemble</h1>
+      <label class="inline"><span data-i18n="field.pos">Point de vente</span><select id="ovPos" class="posSel"></select></label></header>
+    <div class="kpis" id="ovKpis"></div>
+    <div class="cols">
+      <article class="panel"><div class="ph"><h2 data-i18n="ov.health">Connexions PSP</h2><button id="ovHealth" data-i18n="ov.testAll">Tester tout</button></div>
+        <div class="scroll" tabindex="0"><table class="tbl"><thead><tr><th data-i18n="field.pos">Point de vente</th><th data-i18n="pos.primary">PSP principal</th><th data-i18n="pos.fallback">PSP de secours</th></tr></thead><tbody id="ovHealthRows"></tbody></table></div>
+        <p class="small" data-i18n="ov.healthNote">Le test interroge chaque PSP avec les identifiants enregistrés, sans créer de paiement.</p></article>
+      <article class="panel"><div class="ph"><h2 data-i18n="ov.status">Statut public des PSP</h2><a href="/fr/statut/" id="ovStatusLink" class="small" data-i18n="ov.statusLink">Page publique</a></div>
+        <div id="ovStatus" class="stlist"></div></article>
+    </div>
+    <article class="panel"><div class="ph"><h2 data-i18n="ov.recent">Derniers paiements</h2><a href="#payments" class="small" data-i18n="ov.all">Tous les paiements</a></div>
+      <div class="scroll" tabindex="0"><table class="tbl"><thead><tr><th data-i18n="field.reference">Référence</th><th data-i18n="field.time">Heure</th><th class="num" data-i18n="field.amount">Montant</th><th data-i18n="field.state">État</th><th data-i18n="field.module">PSP</th></tr></thead><tbody id="ovRows"></tbody></table></div></article>
+  </section>
+
+  <section id="v-payments" class="view" hidden>
+    <header class="vh"><h1 data-i18n="payments.title">Paiements</h1>
+      <label class="inline"><span data-i18n="field.pos">Point de vente</span><select id="payPos" class="posSel"></select></label></header>
+    <div class="bar"><label class="inline"><span data-i18n="field.state">État</span><select id="payState"><option value="" data-i18n="all">Tous</option><option value="authorized" data-i18n="state.authorized">Autorisé</option><option value="pending" data-i18n="state.pending">En cours</option><option value="declined" data-i18n="state.declined">Refusé</option><option value="cancelled" data-i18n="state.cancelled">Annulé</option><option value="failed" data-i18n="state.failed">Échec</option></select></label>
+      <button id="verifyBtn" data-i18n="payments.verify">Vérifier le journal</button><span id="verifyOut" class="mono small" role="status"></span></div>
+    <div class="split">
+      <div class="scroll" tabindex="0"><table class="tbl sel"><thead><tr><th data-i18n="field.reference">Référence</th><th data-i18n="field.time">Heure</th><th class="num" data-i18n="field.amount">Montant</th><th data-i18n="field.state">État</th><th data-i18n="field.module">PSP</th></tr></thead><tbody id="payRows"></tbody></table></div>
+      <aside id="journal" class="panel jpanel" hidden aria-live="polite"><div class="ph"><h2><span data-i18n="payments.journal">Journal signé</span> · <span id="jRef" class="mono"></span></h2><button id="jClose" class="ghost" data-i18n="action.close">Fermer</button></div><ol id="journalList" class="jl"></ol></aside>
+    </div>
+  </section>
+
+  <section id="v-reconcile" class="view" hidden>
+    <header class="vh"><h1 data-i18n="rec.title">Rapprochement</h1></header>
+    <p class="lead" data-i18n="rec.lead">Chaque paiement terminé est redemandé au PSP et comparé au journal. Un écart signale un débit sans paiement autorisé, ou l'inverse.</p>
+    <form id="recForm" class="panel bar">
+      <label class="inline"><span data-i18n="field.pos">Point de vente</span><select id="recPos" class="posSel"></select></label>
+      <label class="inline"><span data-i18n="rec.from">Du</span><input id="recFrom" type="date"></label>
+      <label class="inline"><span data-i18n="rec.to">Au</span><input id="recTo" type="date"></label>
+      <button class="primary" data-i18n="rec.run">Lancer le rapprochement</button>
+    </form>
+    <div id="recOut" hidden>
+      <div class="kpis" id="recKpis"></div>
+      <article class="panel"><div class="ph"><h2 data-i18n="rec.totals">Totaux par PSP</h2><button id="recCsv" data-i18n="rec.csv">Exporter en CSV</button></div>
+        <div class="scroll" tabindex="0"><table class="tbl"><thead><tr><th data-i18n="field.module">PSP</th><th class="num" data-i18n="rec.count">Paiements</th><th class="num" data-i18n="rec.authorized">Autorisé</th><th class="num" data-i18n="rec.refunded">Remboursé</th><th class="num" data-i18n="rec.net">Net</th></tr></thead><tbody id="recTotals"></tbody></table></div></article>
+      <article class="panel"><h2 data-i18n="rec.detail">Détail</h2>
+        <div class="scroll" tabindex="0"><table class="tbl"><thead><tr><th data-i18n="field.reference">Référence</th><th data-i18n="field.time">Heure</th><th class="num" data-i18n="field.amount">Montant</th><th data-i18n="rec.meridian">Journal Meridian</th><th data-i18n="rec.psp">PSP</th><th data-i18n="rec.result">Résultat</th></tr></thead><tbody id="recRows"></tbody></table></div></article>
+    </div>
   </section>
 
   <section id="v-pos" class="view" hidden>
-    <h1 data-i18n="pos.title">Points de vente</h1>
+    <header class="vh"><h1 data-i18n="pos.title">Points de vente</h1></header>
+    <div id="posList" class="list"></div>
     <form id="posForm" class="panel">
       <h2 data-i18n="pos.new">Nouveau point de vente</h2>
       <div class="grid2">
@@ -43,47 +85,47 @@
       </div>
       <button class="primary" data-i18n="action.create">Créer</button>
     </form>
-    <div id="posList" class="list"></div>
-    <form id="routeForm" class="panel" hidden>
-      <h2><span data-i18n="pos.routing">Brancher une solution</span> · <span id="routePos"></span></h2>
+    <form id="pspForm" class="panel" hidden>
+      <div class="ph"><h2><span data-i18n="pos.psp">PSP de la caisse</span> · <span id="pspPosName"></span></h2><button type="button" id="pspClose" class="ghost" data-i18n="action.close">Fermer</button></div>
+      <p class="small" data-i18n="pos.pspNote">Les identifiants PSP sont chiffrés et ne sont jamais réaffichés : saisissez-les à chaque modification.</p>
       <div class="grid2">
-        <label><span data-i18n="pos.primary">Solution principale</span><select id="primarySel"></select></label>
-        <label><span data-i18n="pos.fallback">Solution de secours</span><select id="fallbackSel"></select></label>
+        <label><span data-i18n="pos.primary">PSP principal</span><select id="primarySel"></select></label>
+        <label><span data-i18n="pos.fallback">PSP de secours</span><select id="fallbackSel"></select></label>
       </div>
       <div id="primaryFields" class="grid2"></div>
       <div id="fallbackFields" class="grid2"></div>
-      <button class="primary" data-i18n="action.plug">Brancher</button>
+      <div class="bar end"><button class="primary" data-i18n="action.save">Enregistrer</button></div>
     </form>
   </section>
 
-  <section id="v-payments" class="view" hidden>
-    <h1 data-i18n="payments.title">Paiements</h1>
-    <div class="row"><label for="payPos" data-i18n="field.pos">Point de vente</label><select id="payPos"></select><button id="verifyBtn" data-i18n="payments.verify">Vérifier le journal</button><span id="verifyOut" class="mono"></span></div>
-    <div class="scroll"><table class="tbl"><thead><tr><th data-i18n="field.reference">Référence</th><th data-i18n="field.amount">Montant</th><th data-i18n="field.state">État</th><th data-i18n="field.module">Solution</th></tr></thead><tbody id="payRows"></tbody></table></div>
-    <div id="journal" class="panel" hidden><h2 data-i18n="payments.journal">Journal signé</h2><ol id="journalList" class="mono jl"></ol></div>
+  <section id="v-catalog" class="view" hidden>
+    <header class="vh"><h1 data-i18n="catalog.title">Catalogue</h1>
+      <label class="inline"><span data-i18n="field.country">Pays</span><select id="catCountry"></select></label></header>
+    <div id="catList" class="cards"></div>
   </section>
 
   <section id="v-kiosk" class="view" hidden>
-    <h1 data-i18n="kiosk.title">Borne de démo</h1>
+    <header class="vh"><h1 data-i18n="kiosk.title">Borne de démo</h1></header>
     <div class="kiosk">
       <div class="panel">
-        <label><span data-i18n="field.pos">Point de vente</span><select id="kPos"></select></label>
+        <label><span data-i18n="field.pos">Point de vente</span><select id="kPos" class="posSel"></select></label>
         <label><span data-i18n="field.amount">Montant</span><input id="kAmount" type="number" min="0.5" step="0.5" value="24.50" inputmode="decimal"></label>
-        <div class="row"><button class="primary" id="kPay" data-i18n="action.pay">Payer</button><button id="kCancel" data-i18n="action.cancel" disabled>Annuler</button></div>
+        <div class="bar"><button class="primary" id="kPay" data-i18n="action.pay">Payer</button><button id="kCancel" data-i18n="action.cancel" disabled>Annuler</button></div>
       </div>
-      <div class="screen" id="kScreen"><div class="big" id="kState" data-i18n="state.ready">Prête</div><div class="small" id="kDetail"></div></div>
+      <div class="screen" id="kScreen" aria-live="polite"><div class="big" id="kState" data-i18n="state.ready">Prête</div><div class="small" id="kDetail"></div></div>
     </div>
   </section>
 
   <section id="v-settings" class="view" hidden>
-    <h1 data-i18n="settings.title">Clé API</h1>
-    <form id="keyForm" class="panel">
+    <header class="vh"><h1 data-i18n="settings.title">Clé API</h1></header>
+    <form id="keyForm" class="panel narrow">
       <label><span data-i18n="settings.key">Clé Meridian (mk_test_…)</span><input id="apiKey" autocomplete="off" spellcheck="false"></label>
       <button class="primary" data-i18n="action.save">Enregistrer</button>
       <p class="small" data-i18n="settings.note">La clé reste dans cet onglet du navigateur.</p>
     </form>
   </section>
 </main>
+</div>
 <script src="app.js"></script>
 </body>
 </html>

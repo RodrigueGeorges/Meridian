@@ -1,0 +1,13 @@
+{
+  "name": "@meridian/terminals",
+  "version": "0.1.0",
+  "description": "Pilotes de terminaux de paiement côté caisse (Caisse-AP/Concert sur IP, ZVT, nexo Retailer) et service terminal idempotent de l'agent Meridian.",
+  "type": "module",
+  "license": "UNLICENSED",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "@meridian/bridges": "workspace:*",
+    "@meridian/core": "workspace:*",
+    "@meridian/engine": "workspace:*"
+  }
+}

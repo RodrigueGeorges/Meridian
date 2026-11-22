@@ -17,7 +17,9 @@
     "dev": "concurrently -n sim,api \"pnpm sim\" \"pnpm api\"",
     "sandbox": "node tools/sandbox-check/meridian-sandbox-test.mjs",
     "demo": "tsx tools/demo/main.ts",
-    "caisse": "tsx tools/demo/caisse.ts"
+    "caisse": "tsx tools/demo/caisse.ts",
+    "tpe": "tsx tools/demo/tpe.ts",
+    "edge": "tsx apps/edge/src/main.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
@@ -34,6 +36,7 @@
     "@meridian/engine": "workspace:*",
     "@meridian/sim": "workspace:*",
     "@meridian/store-pg": "workspace:*",
-    "@meridian/bridges": "workspace:*"
+    "@meridian/bridges": "workspace:*",
+    "@meridian/terminals": "workspace:*"
   }
 }

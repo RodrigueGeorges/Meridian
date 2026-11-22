@@ -1,0 +1,10 @@
+<p class="legal-lede">Chaque PSP du catalogue, mesuré sur les paiements réels qui passent par Meridian. Les chiffres sont recalculés toutes les 30 secondes.</p>
+<section class="st" id="psp-status" data-src="/v1/status" data-l-operational="Opérationnel" data-l-degraded="Dégradé" data-l-down="Ne répond pas" data-l-no_data="Pas encore assez de paiements" data-l-24h="Réponse sur 24 h" data-l-90d="Sur 90 jours" data-l-avg="Délai moyen" data-l-hours="Taux de réponse heure par heure, sur 24 h" data-l-none="Aucune donnée" data-l-error="Statut indisponible pour le moment." data-l-upd="Mis à jour à" data-locale="fr-FR">
+<p class="st-empty">Le statut s'affiche avec JavaScript activé. Il est aussi disponible en JSON à l'adresse <code>/v1/status</code>.</p>
+</section>
+<section><h2>Comment c'est mesuré</h2><ul>
+<li><strong>Réponse</strong> : le PSP a rendu une issue (autorisé, refusé ou annulé). Un refus de carte est une réponse : le PSP fonctionne.</li>
+<li><strong>Pas de réponse</strong> : échec technique, ou bascule vers le PSP de secours parce que le PSP principal était injoignable.</li>
+<li><strong>Délai moyen</strong> : de la création du paiement à son issue, présentation de la carte comprise.</li>
+<li>Aucun volume, aucun montant, aucun marchand n'est publié. Sous 20 paiements sur la période, rien n'est affiché.</li>
+</ul></section>

@@ -5,6 +5,8 @@ const Call = z.object({
   method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']),
   path: z.string().startsWith('/'),
   body: z.record(z.string(), z.unknown()).optional(),
+  /** Réponse 2xx non JSON acceptée (ex. « ok » d'un point d'entrée asynchrone), exposée sous `_text`. */
+  acceptText: z.boolean().optional(),
 });
 const Condition = z.object({
   path: z.string(),
@@ -31,7 +33,14 @@ export const ModuleSchema = z
     encoding: z.enum(['json', 'form']).default('json'),
     errorCodePath: z.string().default('error.code'),
     idempotency: z.object({ header: z.string() }).optional(),
-    lookup: Call.extend({ pick: z.record(z.string(), z.string()) }).optional(),
+    /** Recherche avant tout renvoi d'une étape incertaine, pour les PSP sans clé d'idempotence. */
+    lookup: Call.extend({ pick: z.record(z.string(), z.string()), notFound: z.array(Condition).optional() }).optional(),
+    /** Variables remises à la caisse (ex. secret client pour un paiement encaissé sur l'appareil). */
+    exposeVars: z.array(z.string()).optional(),
+    /** Jeton de connexion pour un SDK sur l'appareil (Tap to Pay). */
+    deviceToken: Call.extend({ pick: z.string() }).optional(),
+    /** preview : module écrit, non validé sur la sandbox du PSP ; utilisable en mode test seulement. */
+    maturity: z.enum(['available', 'preview']).default('available'),
     pay: z.object({ steps: z.array(Step).min(1) }),
     status: z.object({
       sources: z.record(z.string(), Call),

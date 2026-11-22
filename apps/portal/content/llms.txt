@@ -1,0 +1,37 @@
+# Meridian
+
+> Meridian est la couche paiement des éditeurs de logiciels de caisse et de bornes en Europe : une intégration (cinq appels REST ou les protocoles Concert, ZVT et nexo Retailer) relie la caisse à tous les PSP du catalogue. Le PSP garde le contrat, le KYC, les fonds et sa commission ; Meridian transporte les instructions, jamais l'argent. Chaque paiement est écrit dans un journal chaîné et signé avant l'appel au PSP : zéro double débit, même en cas de coupure réseau.
+
+État au lancement : Stripe Terminal est disponible ; les autres PSP sont prévus, sans partenariat à ce jour. Pays : France, Belgique, Pays-Bas, Allemagne, Espagne, Italie, Autriche, Suisse. Meridian est un connecteur et un catalogue : l'éditeur ou le marchand choisit son PSP dans le catalogue et le branche sur la caisse, avec un PSP de secours facultatif si le premier est injoignable. Meridian ne choisit jamais le PSP à la place du marchand : ce n'est pas un orchestrateur.
+
+Modes de branchement : PSP dans le cloud ; TPE du magasin en local par l'agent Meridian (Caisse-AP sur IP, ZVT, nexo ; API locale identique sur 127.0.0.1:8787) ; TPE du magasin depuis une caisse en ligne (API cloud relayée à l'agent par une connexion sortante) ; caisse existante sans développement (passerelles Concert, ZVT, nexo) ; Tap to Pay sur l'appareil.
+
+## API
+
+- Base : {{BASE}}/v1, authentification `Authorization: Bearer mk_test_…` ou `mk_live_…`
+- Montants en unités mineures entières (2450 = 24,50 €). La référence identifie le paiement : la rejouer ne crée jamais un second débit.
+- `POST /v1/payments` {posId, reference, amount, currency, waitMs?} : payer
+- `GET /v1/payments/{reference}?posId=` : état (created, pending, authorized, declined, cancelled, failed)
+- `POST /v1/payments/{reference}/cancel` {posId} : annuler
+- `POST /v1/payments/{reference}/refunds` {posId, amount, refundNumber?} : rembourser
+- `GET /v1/payments/{reference}/receipt?posId=` : reçu avec preuve signée
+- `PUT /v1/pos/{id}/psp` {primary, fallback?} : brancher le PSP choisi dans le catalogue
+- `GET /v1/modules`, `GET /v1/status` (public), `GET /v1/journal/verify`, `GET /v1/edge/agents`
+
+## Documentation
+
+- [Développeurs]({{BASE}}/fr/developpeurs/) : API, SDK JavaScript, webhooks signés
+- [Developers]({{BASE}}/en/developers/)
+- [Concert (Caisse-AP)]({{BASE}}/fr/protocole-concert-caisse-ap/), [ZVT]({{BASE}}/fr/protocole-zvt/), [nexo Retailer]({{BASE}}/fr/nexo-retailer/) : passerelles de compatibilité
+- [Sécurité]({{BASE}}/fr/securite/) : journal signé, idempotence, secrets chiffrés
+- [Statut des PSP]({{BASE}}/fr/statut/)
+
+## Outils
+
+- Serveur MCP : `MERIDIAN_API_KEY=mk_test_… MERIDIAN_URL={{BASE}} npx tsx packages/mcp/src/main.ts`. Lecture avec toute clé ; paiement de test uniquement avec une clé de test ; aucun outil d'annulation ni de remboursement.
+- SDK : `@meridian/sdk`
+
+## Optional
+
+- [Mentions légales]({{BASE}}/fr/mentions-legales/)
+- [Contact]({{BASE}}/fr/contact/)

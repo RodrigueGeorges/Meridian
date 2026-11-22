@@ -123,11 +123,12 @@ export interface PosRecord {
   id: string; orgId: string; label: string; country: string; currency: Currency; locale: string; timezone: string;
   primaryModule?: string; fallbackModule?: string;
 }
+export type Binding = { moduleId: string; config: Record<string, unknown>; baseUrl?: string };
 export interface PosRepo {
   create(p: PosRecord): Promise<PosRecord>;
   get(id: string): Promise<PosRecord | undefined>;
   list(orgId: string): Promise<PosRecord[]>;
-  setRouting(id: string, primary: { moduleId: string; config: Record<string, unknown>; baseUrl?: string }, fallback?: { moduleId: string; config: Record<string, unknown>; baseUrl?: string }): Promise<void>;
+  setRouting(id: string, primary: Binding, fallback?: Binding): Promise<void>;
   routing(id: string): Promise<PosRouting | undefined>;
 }
 
@@ -152,11 +153,11 @@ export class PgPosRepo implements PosRepo {
     const r = await this.pool.query('SELECT * FROM pos WHERE org_id=$1 ORDER BY created_at', [orgId]);
     return r.rows.map((x) => this.map(x));
   }
-  async setRouting(id: string, primary: { moduleId: string; config: Record<string, unknown>; baseUrl?: string }, fallback?: { moduleId: string; config: Record<string, unknown>; baseUrl?: string }) {
+  async setRouting(id: string, primary: Binding, fallback?: Binding) {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      for (const b of [primary, fallback].filter(Boolean) as { moduleId: string; config: Record<string, unknown>; baseUrl?: string }[]) {
+      for (const b of [primary, fallback].filter(Boolean) as Binding[]) {
         await client.query(
           `INSERT INTO pos_module_config (pos_id, module_id, config_encrypted, base_url) VALUES ($1,$2,$3,$4)
            ON CONFLICT (pos_id, module_id) DO UPDATE SET config_encrypted=EXCLUDED.config_encrypted, base_url=EXCLUDED.base_url, updated_at=now()`,
@@ -203,7 +204,7 @@ export class MemoryPosRepo implements PosRepo {
   async list(orgId: string) {
     return [...this.items.values()].filter((x) => x.orgId === orgId).map(({ bindings: _b, ...rest }) => rest);
   }
-  async setRouting(id: string, primary: { moduleId: string; config: Record<string, unknown>; baseUrl?: string }, fallback?: { moduleId: string; config: Record<string, unknown>; baseUrl?: string }) {
+  async setRouting(id: string, primary: Binding, fallback?: Binding) {
     const x = this.items.get(id);
     if (!x) throw new Error('pos_not_found');
     x.bindings.set(primary.moduleId, primary);

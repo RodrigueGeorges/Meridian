@@ -1,0 +1,156 @@
+{
+  "id": "stripe-tap-to-pay",
+  "name": "Stripe Tap to Pay (encaissement sur l'appareil)",
+  "version": "0.1.0",
+  "maturity": "preview",
+  "kind": "acceptance_and_acquiring",
+  "baseUrl": "https://api.stripe.com",
+  "config": [
+    {
+      "key": "secretKey",
+      "type": "string",
+      "secret": true,
+      "label": "Clé secrète Stripe"
+    },
+    {
+      "key": "locationId",
+      "type": "string",
+      "label": "Emplacement Stripe Terminal (tml_…)"
+    }
+  ],
+  "auth": {
+    "header": "Authorization",
+    "value": "Bearer {{config.secretKey}}"
+  },
+  "encoding": "form",
+  "idempotency": {
+    "header": "Idempotency-Key"
+  },
+  "exposeVars": [
+    "clientSecret",
+    "intentId"
+  ],
+  "deviceToken": {
+    "method": "POST",
+    "path": "/v1/terminal/connection_tokens",
+    "body": {
+      "location": "{{config.locationId}}"
+    },
+    "pick": "secret"
+  },
+  "pay": {
+    "steps": [
+      {
+        "id": "create_intent",
+        "method": "POST",
+        "path": "/v1/payment_intents",
+        "body": {
+          "amount": "{{tx.amount}}",
+          "currency": "{{tx.currencyLower}}",
+          "payment_method_types": [
+            "card_present"
+          ],
+          "capture_method": "automatic",
+          "metadata": {
+            "meridian_ref": "{{tx.reference}}"
+          }
+        },
+        "save": {
+          "intentId": "id",
+          "clientSecret": "client_secret"
+        }
+      }
+    ]
+  },
+  "status": {
+    "sources": {
+      "intent": {
+        "method": "GET",
+        "path": "/v1/payment_intents/{{vars.intentId}}?expand[]=latest_charge"
+      }
+    },
+    "rules": [
+      {
+        "when": [
+          {
+            "path": "intent.status",
+            "equals": "succeeded"
+          }
+        ],
+        "state": "authorized"
+      },
+      {
+        "when": [
+          {
+            "path": "intent.status",
+            "equals": "requires_capture"
+          }
+        ],
+        "state": "authorized"
+      },
+      {
+        "when": [
+          {
+            "path": "intent.status",
+            "equals": "canceled"
+          }
+        ],
+        "state": "cancelled"
+      }
+    ]
+  },
+  "cancel": {
+    "method": "POST",
+    "path": "/v1/payment_intents/{{vars.intentId}}/cancel",
+    "busyCodes": [
+      "payment_intent_unexpected_state"
+    ]
+  },
+  "refund": {
+    "method": "POST",
+    "path": "/v1/refunds",
+    "body": {
+      "payment_intent": "{{vars.intentId}}",
+      "amount": "{{refund.amount}}"
+    }
+  },
+  "receipt": {
+    "brand": "intent.latest_charge.payment_method_details.card_present.brand",
+    "last4": "intent.latest_charge.payment_method_details.card_present.last4"
+  },
+  "capabilities": {
+    "countries": [
+      "FR",
+      "BE",
+      "NL",
+      "DE",
+      "ES",
+      "IT",
+      "AT",
+      "IE",
+      "PT",
+      "LU"
+    ],
+    "currencies": [
+      "EUR"
+    ],
+    "paymentMethods": {
+      "*": [
+        "visa",
+        "mastercard",
+        "amex"
+      ]
+    },
+    "partialRefund": true,
+    "cancelDuringAuth": false,
+    "languages": [
+      "fr",
+      "en",
+      "de",
+      "es",
+      "it",
+      "nl"
+    ],
+    "compatProtocols": []
+  }
+}

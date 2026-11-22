@@ -36,7 +36,8 @@ describe('modules', () => {
     expect(matches([{ path: 'id', equalsVar: 'v' }], d, { v: 'x' })).toBe(true);
   });
   it('catalogue livré valide ; un module sans idempotence ni lookup est refusé', () => {
-    expect(Object.keys(BUILTIN_MODULES)).toEqual(['stripe-terminal', 'psp-secours']);
+    expect(Object.keys(BUILTIN_MODULES)).toEqual(['stripe-terminal', 'psp-secours', 'adyen-terminal', 'stripe-tap-to-pay', 'edge-terminal']);
+    expect(Object.values(BUILTIN_MODULES).filter((m) => m.maturity === 'available').map((m) => m.id)).toEqual(['stripe-terminal', 'psp-secours']);
     const bad = structuredClone(BUILTIN_MODULES['psp-secours']!) as Record<string, unknown>;
     delete bad.idempotency;
     expect(() => parseModule(bad)).toThrow(/idempotency ou lookup/);
@@ -58,3 +59,4 @@ describe('journal', () => {
     expect((await j.verify()).brokenAt).toBe(2);
   });
 });
+

@@ -1,0 +1,48 @@
+{
+  "id": "edge-terminal",
+  "name": "TPE du magasin via l'agent Meridian (Caisse-AP, ZVT, nexo)",
+  "version": "0.1.0",
+  "maturity": "preview",
+  "kind": "acceptance",
+  "baseUrl": "edge://relay",
+  "config": [
+    { "key": "agentId", "type": "string", "label": "Identifiant de l'agent du magasin" }
+  ],
+  "encoding": "json",
+  "idempotency": { "header": "Idempotency-Key" },
+  "pay": {
+    "steps": [
+      {
+        "id": "terminal_payment",
+        "method": "POST",
+        "path": "/{{config.orgId}}/{{config.agentId}}/terminal/payments",
+        "body": { "reference": "{{tx.reference}}", "amount": "{{tx.amount}}", "currency": "{{tx.currency}}" }
+      }
+    ]
+  },
+  "status": {
+    "sources": { "t": { "method": "GET", "path": "/{{config.orgId}}/{{config.agentId}}/terminal/payments/{{tx.reference}}" } },
+    "rules": [
+      { "when": [{ "path": "t.state", "equals": "authorized" }], "state": "authorized" },
+      { "when": [{ "path": "t.state", "equals": "declined" }], "state": "declined", "detailPath": "t.detail" },
+      { "when": [{ "path": "t.state", "equals": "cancelled" }], "state": "cancelled" }
+    ]
+  },
+  "cancel": { "method": "POST", "path": "/{{config.orgId}}/{{config.agentId}}/terminal/payments/{{tx.reference}}/cancel", "busyCodes": ["cancel_unsupported"] },
+  "refund": {
+    "method": "POST",
+    "path": "/{{config.orgId}}/{{config.agentId}}/terminal/payments/{{tx.reference}}/refunds",
+    "body": { "amount": "{{refund.amount}}", "number": "{{refund.number}}" }
+  },
+  "health": { "method": "GET", "path": "/{{config.orgId}}/{{config.agentId}}/terminal/health" },
+  "receipt": { "brand": "t.brand", "last4": "t.last4", "terminalRef": "t.terminalRef" },
+  "capabilities": {
+    "countries": ["FR", "BE", "NL", "DE", "ES", "IT", "AT", "CH"],
+    "currencies": ["EUR", "CHF"],
+    "paymentMethods": { "*": ["visa", "mastercard", "maestro"], "FR": ["cb"], "BE": ["bancontact"], "DE": ["girocard"] },
+    "partialRefund": true,
+    "cancelDuringAuth": false,
+    "languages": ["fr", "en", "de", "es", "it", "nl"],
+    "compatProtocols": ["concert", "zvt", "nexo"]
+  }
+}

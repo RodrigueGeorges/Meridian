@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Meridian — Le connecteur universel entre les caisses et les PSP</title>
+<title>Meridian — Le connecteur de paiement entre les caisses, les terminaux et les PSP</title>
 <meta name="description" content="Connecteur de paiement neutre pour caisses et bornes en Europe : un SDK, tous les PSP, aucun double débit, une preuve pour chaque paiement.">
 <link rel="canonical" href="{{BASE}}/portal/">
 <meta name="theme-color" content="#12121A">
@@ -57,9 +57,9 @@
 <section class="view" data-view="home">
   <div class="hero-dark"><div class="wrap hero2">
     <div class="h2-txt">
-      <p class="eyebrow-pill"><span class="dot"></span><span data-i18n="v9.pill">Le store des PSP pour les caisses et les bornes</span></p>
-      <h1 class="display" data-i18n="v9.h1">Le connecteur universel entre les caisses et les PSP.</h1>
-      <p class="lede" data-i18n="v9.lede">Les éditeurs de caisse connectent n'importe quel PSP du catalogue en quelques clics, sans développement. Les PSP deviennent disponibles dans toutes les caisses connectées.</p>
+      <p class="eyebrow-pill"><span class="dot"></span><span data-i18n="v9.pill">Le connecteur de paiement des caisses et des bornes</span></p>
+      <h1 class="display" data-i18n="v9.h1">Toute caisse, tout terminal, tout PSP. Un seul connecteur.</h1>
+      <p class="lede" data-i18n="v9.lede">En cloud, en local ou sans toucher à la caisse : l'éditeur et le distributeur choisissent dans le catalogue, Meridian branche et prouve chaque paiement.</p>
       <div class="ctas">
         <button class="btn" type="button" data-contact="software" data-i18n="v6.cta.sw">Je suis éditeur</button>
         <button class="btn ghost" type="button" data-contact="psp" data-i18n="v6.cta.psp">Je suis PSP</button>
@@ -67,7 +67,7 @@
       <ul class="wins">
         <li><b data-i18n="v9.w1.h">Quelques clics</b><span data-i18n="v9.w1.p">Pour connecter un PSP, sans ligne de code.</span></li>
         <li><b data-i18n="v6.w2.h">Zéro double débit</b><span data-i18n="v6.w2.p">Même quand le réseau coupe.</span></li>
-        <li><b data-i18n="v8.w3.h">Hors périmètre carte</b><span data-i18n="v8.w3.p">Aucune donnée de carte dans votre logiciel.</span></li>
+        <li><b data-i18n="v10.w3.h">Revenu sur chaque paiement</b><span data-i18n="v10.w3.p">Une part de chaque transaction pour l'éditeur.</span></li>
       </ul>
     </div>
 
@@ -128,57 +128,121 @@
     <p class="m-txt"><span data-i18n="v5.mkt.p">des commerçants utilisent plusieurs acquéreurs ; un sur quatre en utilise plus de cinq. Le logiciel de caisse, lui, n'en intègre souvent qu'un.</span> <a href="https://thepaypers.com/payments/thought-leader-insights/payment-orchestration-can-it-truly-enable-merchant-growth" data-i18n="v5.mkt.src">Source : ACI Worldwide, The Paypers, 2026</a></p>
   </div>
 
+  <section class="modes-band" aria-labelledby="mdH">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="eyebrow" data-i18n="md2.k">Tous les branchements</p>
+        <h2 id="mdH" data-i18n="md2.h">Une seule API, quel que soit le branchement.</h2>
+        <p class="lede" data-i18n="md2.p">Caisse installée ou en ligne, terminal du magasin ou PSP dans le cloud, protocole existant ou nouvelle intégration : les mêmes cinq appels, le même journal signé, la même garantie.</p>
+      </div>
+      <ol class="modes">
+        <li class="mode"><p class="mpath" aria-hidden="true"><span data-i18n="md2.n.caisse">Caisse</span><i></i><span class="core">Meridian</span><i></i><span>PSP</span><i></i><span data-i18n="md2.n.tpe">TPE</span></p><h3 data-i18n="md2.1.h">PSP dans le cloud</h3><p data-i18n="md2.1.p">La caisse appelle Meridian, qui pilote le terminal par l'API du PSP.</p><p class="mstate m-ok"><span><span data-i18n="md2.s.ok">Disponible</span> · Stripe Terminal</span></p></li>
+        <li class="mode"><p class="mpath" aria-hidden="true"><span data-i18n="md2.n.caisse">Caisse</span><i></i><span data-i18n="md2.n.agent">Agent du magasin</span><i></i><span data-i18n="md2.n.tpe">TPE</span></p><h3 data-i18n="md2.2.h">Terminal du magasin, en local</h3><p data-i18n="md2.2.p">La caisse installée parle à l'agent Meridian du magasin, qui pilote le TPE en Caisse-AP, ZVT ou nexo. Fonctionne sans Internet.</p><p class="mstate m-run"><span data-i18n="md2.s.val">En validation sur matériel réel</span></p></li>
+        <li class="mode"><p class="mpath" aria-hidden="true"><span data-i18n="md2.n.saas">Caisse en ligne</span><i></i><span class="core">Meridian</span><i></i><span data-i18n="md2.n.agent">Agent du magasin</span><i></i><span data-i18n="md2.n.tpe">TPE</span></p><h3 data-i18n="md2.3.h">Terminal du magasin, depuis une caisse en ligne</h3><p data-i18n="md2.3.p">La caisse SaaS appelle l'API Meridian, qui relaie à l'agent du magasin par une connexion sortante : aucun port à ouvrir.</p><p class="mstate m-run"><span data-i18n="md2.s.val">En validation sur matériel réel</span></p></li>
+        <li class="mode"><p class="mpath" aria-hidden="true"><span data-i18n="md2.n.caisse">Caisse</span><i></i><span class="core">Meridian</span><i></i><span>PSP</span></p><h3 data-i18n="md2.4.h">Caisse existante, sans développement</h3><p data-i18n="md2.4.p">La caisse garde sa trame Concert, ZVT ou nexo : Meridian se présente comme son terminal.</p><p class="mstate m-ok"><span data-i18n="md2.s.demo">Disponible en démonstration</span></p></li>
+        <li class="mode"><p class="mpath" aria-hidden="true"><span data-i18n="md2.n.app">Application</span><i></i><span data-i18n="md2.n.sdk">SDK du PSP</span><i></i><span class="core">Meridian</span></p><h3 data-i18n="md2.5.h">Sur le téléphone ou la tablette</h3><p data-i18n="md2.5.p">Encaissement sans terminal avec le Tap to Pay du PSP ; Meridian suit et prouve chaque paiement.</p><p class="mstate m-run"><span data-i18n="md2.s.val">En validation sur matériel réel</span></p></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="bento-band" aria-labelledby="btH">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="eyebrow" data-i18n="v7.cmp.k">Pourquoi Meridian</p>
+        <h2 id="btH" data-i18n="bt.h">Construit pour l'éditeur de caisse. Pas pour une banque, pas pour un seul PSP.</h2>
+        <p class="lede" data-i18n="bt.p">Cinq engagements que ni les plateformes bancaires, ni les orchestrateurs pour grands comptes, ni les offres d'un seul PSP ne prennent.</p>
+      </div>
+      <div class="bento">
+        <article class="tile t-4">
+          <div class="tile-txt"><h3 data-i18n="bt.1.h">Fait pour votre logiciel</h3><p data-i18n="bt.1.p">Cinq appels, un SDK : la caisse se branche à un PSP ou au TPE du magasin, et vos caisses Concert, ZVT ou nexo passent telles quelles.</p></div>
+          <div class="ui ui-proto" aria-hidden="true">
+            <div class="pcol"><span class="chip">Concert</span><span class="chip">ZVT</span><span class="chip">nexo</span><span class="chip mono">SDK · API</span></div>
+            <div class="pwire"></div>
+            <div class="pcore"><svg viewBox="0 0 32 32" width="22" height="22"><circle cx="16" cy="16" r="12" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 4C8.5 9.5 8.5 22.5 16 28" fill="none" stroke="#AEB5FF" stroke-width="2.2" stroke-linecap="round"/></svg><b>Meridian</b></div>
+            <div class="pwire"></div>
+            <div class="pcol"><span class="chip on"><i class="dot ok"></i>Stripe Terminal</span><span class="chip ghost"></span><span class="chip ghost"></span><span class="chip ghost"></span></div>
+          </div>
+        </article>
+        <article class="tile t-2 t-accent">
+          <div class="tile-txt"><h3 data-i18n="bt.2.h">Vous gagnez sur chaque paiement</h3><p data-i18n="bt.2.p">Les PSP rémunèrent la distribution ; vous touchez une part de chaque transaction de vos marchands.</p></div>
+          <div class="ui ui-rev">
+            <div class="rbar" aria-hidden="true"><span class="rpay" data-i18n="ui.pay">Paiement</span><span class="rshare" data-i18n="ui.share">Votre part</span></div>
+            <a class="tile-link" href="#calc" data-i18n="ui.sim">Simuler votre revenu</a>
+          </div>
+        </article>
+        <article class="tile t-2">
+          <div class="tile-txt"><h3 data-i18n="bt.3.h">Zéro double débit, garanti</h3><p data-i18n="bt.3.p">Chaque paiement est prouvé par un journal signé. Un double débit causé par Meridian est remboursé.</p></div>
+          <div class="ui ui-log mono" aria-hidden="true">
+            <p><span>+0,00 s</span><span data-i18n="ui.l1">Paiement créé</span></p>
+            <p class="warn"><span>+0,51 s</span><span data-i18n="ui.l2">Réseau coupé</span></p>
+            <p class="ok"><span>+2,92 s</span><span data-i18n="ui.l3">Autorisé</span></p>
+            <p class="deb"><span data-i18n="ui.debits">Débits</span><b>1</b></p>
+          </div>
+        </article>
+        <article class="tile t-2">
+          <div class="tile-txt"><h3 data-i18n="bt.4.h">Neutre, et vérifiable</h3><p data-i18n="bt.4.p">Même barème publié pour tous les PSP. Aucun PSP ni aucune banque au capital.</p></div>
+          <div class="ui ui-neutral" aria-hidden="true">
+            <p><i class="ic" style="--h:275">A</i><span class="nbar"></span></p>
+            <p><i class="ic" style="--h:150">B</i><span class="nbar"></span></p>
+            <p><i class="ic" style="--h:25">C</i><span class="nbar"></span></p>
+            <p class="nlab" data-i18n="ui.same">Même barème</p>
+          </div>
+        </article>
+        <article class="tile t-2">
+          <div class="tile-txt"><h3 data-i18n="bt.5.h">Un catalogue ouvert et noté</h3><p data-i18n="bt.5.p">Chaque PSP publie son module et son rapport de tests de panne. Rien n'entre sans passer les 8 scénarios.</p></div>
+          <div class="ui ui-mod" aria-hidden="true">
+            <div class="mcard"><i class="ic" style="--h:275">S</i><div><b>Stripe Terminal</b><span><i class="dot ok"></i><span data-i18n="ui.tests">Scénarios de panne</span> 8/8</span></div></div>
+            <div class="mcard ghost"><i class="ic plus">+</i><div><b data-i18n="ui.yourpsp">Votre module</b><span data-i18n="ui.publish">Publication après tests</span></div></div>
+          </div>
+        </article>
+        <article class="tile t-6 t-row">
+          <div class="tile-txt"><h3 data-i18n="bt.6.h">Le PSP de votre choix, caisse par caisse</h3><p data-i18n="bt.6.p">PSP principal et PSP de secours par caisse, état de chaque connexion en direct. Changer de PSP ne demande aucun développement.</p></div>
+          <div class="ui ui-route" aria-hidden="true">
+            <div class="rrow rhead"><span data-i18n="ui.pos">Point de vente</span><span data-i18n="ui.primary">Principal</span><span data-i18n="ui.backup">Secours</span></div>
+            <div class="rrow"><span>Paris · Caisse 2</span><span><i class="dot ok"></i>Stripe Terminal</span><span><i class="dot idle"></i>PSP B</span></div>
+            <div class="rrow"><span>Berlin · Kiosk 1</span><span><i class="dot ok"></i>Stripe Terminal</span><span><i class="dot idle"></i>PSP B</span></div>
+            <div class="rrow"><span>Bruxelles · Borne 4</span><span><i class="dot warn"></i>PSP A</span><span><i class="dot ok"></i>Stripe Terminal</span></div>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
   <div class="wrap section">
     <div class="sec-head">
-      <p class="eyebrow" data-i18n="v5.nm.eyebrow">Le modèle</p>
-      <h2 data-i18n="v5.nm.h">N éditeurs × M PSP intégrations deviennent N + M.</h2>
-      <p class="lede" data-i18n="v5.nm.p">Aujourd'hui, chaque éditeur intègre chaque PSP, pays par pays. Meridian place un connecteur unique au milieu : chacun s'intègre une seule fois, et le catalogue fait le reste.</p>
+      <p class="eyebrow" data-i18n="nc.k">Instructions et fonds</p>
+      <h2 data-i18n="nc.h">Meridian transporte les instructions. Jamais l'argent.</h2>
+      <p class="lede" data-i18n="nc.p">La caisse envoie l'ordre de paiement à Meridian, qui le transmet au PSP choisi. Les fonds vont directement du PSP au marchand ; le contrat, le KYC et la commission restent chez le PSP.</p>
     </div>
-    <figure class="nm">
-      <div class="nm-col">
-        <p class="nm-k" data-i18n="v5.nm.left">Éditeurs de caisses et de bornes</p>
-        <span data-i18n="v5.nm.l1">Logiciel de caisse</span><span data-i18n="v5.nm.l2">Borne de commande</span><span data-i18n="v5.nm.l3">Kiosque, parking, recharge</span>
-        <p class="nm-f" data-i18n="v5.nm.lf">Intègrent une fois : SDK, REST, Concert, ZVT ou nexo</p>
-      </div>
-      <div class="nm-core">
-        <p class="nm-k">Meridian</p>
-        <b data-i18n="v5.nm.c1">Connecteur universel</b>
-        <span data-i18n="v5.nm.c2">5 appels normalisés</span>
-        <span data-i18n="v5.nm.c3">Catalogue de modules PSP</span>
-        <span data-i18n="v5.nm.c4">Routage principal et secours</span>
-        <span data-i18n="v5.nm.c5">Journal signé, reprise, idempotence</span>
-      </div>
-      <div class="nm-col">
-        <p class="nm-k" data-i18n="v5.nm.right">PSP et acquéreurs</p>
-        <span data-i18n="v5.nm.r1">Acceptation et acquisition</span><span data-i18n="v5.nm.r2">Moyens de paiement locaux</span><span data-i18n="v5.nm.r3">Terminaux pilotés par le cloud</span>
-        <p class="nm-f" data-i18n="v5.nm.rf">Publient une fois : un module déclaratif</p>
-      </div>
+    <figure class="flow2">
+      <div class="fnode"><b data-i18n="nc.pos">Caisse ou borne</b><span data-i18n="nc.pos2">Logiciel de l'éditeur</span></div>
+      <div class="farrow"><span data-i18n="nc.l1">Instructions</span></div>
+      <div class="fnode core"><b>Meridian</b><span data-i18n="nc.mer2">Connexion, journal signé, reprise</span><em data-i18n="nc.l3">Pas de fonds, pas de carte</em></div>
+      <div class="farrow"><span data-i18n="nc.l1">Instructions</span></div>
+      <div class="fnode"><b data-i18n="nc.psp">PSP du marchand</b><span data-i18n="nc.psp2">Contrat, KYC, acquisition</span></div>
+      <div class="fdown"><span data-i18n="nc.l2">Fonds</span></div>
+      <div class="fnode money"><b data-i18n="nc.mch">Compte du marchand</b><span data-i18n="nc.mch2">Versement par le PSP</span></div>
     </figure>
   </div>
 
-  <div class="wrap section aud">
-    <article>
-      <p class="eyebrow" data-i18n="v5.sw.k">Pour les éditeurs</p>
-      <h3 data-i18n="v5.sw.h">Proposez le PSP de chaque marchand, sans projet d'intégration.</h3>
-      <ul>
-        <li data-i18n="v5.sw.1">Une API normalisée : payer, état, annuler, rembourser, reçu.</li>
-        <li data-i18n="v5.sw.2">Activation d'un PSP par point de vente, depuis la console.</li>
-        <li data-i18n="v5.sw.3">Compatibilité Concert, ZVT et nexo : vos caisses existantes fonctionnent telles quelles.</li>
-        <li data-i18n="v5.sw.4">Idempotence par étape, reprise après coupure, aucun double débit.</li>
-      </ul>
-      <a class="link" href="#software" data-i18n="v5.sw.more">Documentation éditeurs</a>
-    </article>
-    <article>
-      <p class="eyebrow" data-i18n="v5.psp.k">Pour les PSP</p>
-      <h3 data-i18n="v5.psp.h">Soyez disponible dans toutes les caisses connectées, avec un seul module.</h3>
-      <ul>
-        <li data-i18n="v5.psp.1">Un module déclaratif décrit votre API : étapes, clés d'idempotence, statuts, codes de refus.</li>
-        <li data-i18n="v5.psp.2">Publication après passage des 8 scénarios de panne sur votre sandbox.</li>
-        <li data-i18n="v5.psp.3">Vous gardez le contrat, le KYC, les fonds et la commission.</li>
-        <li data-i18n="v5.psp.4">Couche neutre : aucun PSP n'est mis en avant dans le catalogue.</li>
-      </ul>
-      <a class="link" href="#psp" data-i18n="v5.psp.more">Publier un module</a>
-    </article>
+  <div class="wrap section">
+    <div class="sec-head">
+      <p class="eyebrow" data-i18n="v10.cmp.k">Comparer</p>
+      <h2 data-i18n="v10.cmp.h">Ce que les autres approches ne vous donnent pas.</h2>
+    </div>
+    <div class="panel cmp-wrap" tabindex="0" role="region" aria-label="Comparatif" data-i18n-aria="a11y.cmp">
+      <table class="cmp">
+        <thead><tr><th scope="col"><span class="sr" data-i18n="a11y.crit">Critère</span></th><th scope="col" data-i18n="v10.cmp.c1">Plateformes bancaires</th><th scope="col" data-i18n="v10.cmp.c2">Paiement intégré d'un seul PSP</th><th scope="col" data-i18n="v10.cmp.c3">Orchestrateurs grands comptes</th><th scope="col" class="me">Meridian</th></tr></thead>
+        <tbody>
+          <tr><th scope="row" data-i18n="v10.cmp.r1">Pensé pour l'éditeur de caisse</th><td class="p" data-i18n="v10.cmp.var">Variable</td><td class="y">✓</td><td class="p" data-i18n="v10.cmp.rare">Rarement</td><td class="me y">✓</td></tr>
+          <tr><th scope="row" data-i18n="v10.cmp.r2">L'éditeur gagne sur chaque paiement</th><td class="p" data-i18n="v10.cmp.var">Variable</td><td class="y">✓</td><td class="p" data-i18n="v10.cmp.rare">Rarement</td><td class="me y">✓</td></tr>
+          <tr><th scope="row" data-i18n="v10.cmp.r3">Le marchand garde son PSP</th><td class="y">✓</td><td class="n">✗</td><td class="y">✓</td><td class="me y">✓</td></tr>
+          <tr><th scope="row" data-i18n="v10.cmp.r4">Caisses Concert, ZVT, nexo sans réécriture</th><td class="p" data-i18n="v10.cmp.var">Variable</td><td class="p" data-i18n="v10.cmp.var">Variable</td><td class="p" data-i18n="v7.cmp.r3c">Terminal compatible requis</td><td class="me y">✓</td></tr>
+          <tr><th scope="row" data-i18n="v10.cmp.r5">Chaque paiement prouvé, double débit remboursé</th><td class="p" data-i18n="v10.cmp.np">Non publié</td><td class="p" data-i18n="v10.cmp.np">Non publié</td><td class="p" data-i18n="v10.cmp.np">Non publié</td><td class="me y">✓</td></tr>
+          <tr><th scope="row" data-i18n="v10.cmp.r6">Barème public, identique pour tous les PSP</th><td class="p" data-i18n="v10.cmp.np">Non publié</td><td class="p" data-i18n="v10.cmp.na">Sans objet</td><td class="p" data-i18n="v10.cmp.np">Non publié</td><td class="me y">✓</td></tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 
   <div class="wrap section">
@@ -189,37 +253,6 @@
     <div class="cov"></div>
   </div>
 
-  <div class="wrap section">
-    <div class="sec-head">
-      <p class="eyebrow" data-i18n="v7.cmp.k">Pourquoi Meridian</p>
-      <h2 data-i18n="v7.cmp.h">La seule approche pensée pour l'éditeur de caisse.</h2>
-    </div>
-    <div class="panel cmp-wrap" tabindex="0" role="region" aria-label="Comparatif" data-i18n-aria="a11y.cmp">
-      <table class="cmp">
-        <thead><tr><th scope="col"><span class="sr" data-i18n="a11y.crit">Critère</span></th><th scope="col" data-i18n="v7.cmp.c1">Intégrations directes</th><th scope="col" data-i18n="v7.cmp.c2">Terminal d'un seul PSP</th><th scope="col" data-i18n="v7.cmp.c3">Orchestrateur pour marchands</th><th scope="col" class="me">Meridian</th></tr></thead>
-        <tbody>
-          <tr><th scope="row" data-i18n="v7.cmp.r1">Le marchand garde son PSP</th><td class="y">✓</td><td class="n">✗</td><td class="y">✓</td><td class="me y">✓</td></tr>
-          <tr><th scope="row" data-i18n="v7.cmp.r2">Une seule intégration pour l'éditeur</th><td class="n">✗</td><td class="y">✓</td><td class="p" data-i18n="v7.cmp.r2c">Par marchand</td><td class="me y">✓</td></tr>
-          <tr><th scope="row" data-i18n="v7.cmp.r3">Caisses Concert, ZVT, nexo sans réécriture</th><td class="n">✗</td><td class="p" data-i18n="v7.cmp.var">Variable</td><td class="p" data-i18n="v7.cmp.r3c">Terminal compatible requis</td><td class="me y">✓</td></tr>
-          <tr><th scope="row" data-i18n="v7.cmp.r4">Contrat, fonds et commission restent au PSP</th><td class="y">✓</td><td class="y">✓</td><td class="p" data-i18n="v7.cmp.var">Variable</td><td class="me y">✓</td></tr>
-          <tr><th scope="row" data-i18n="v7.cmp.r5">Reprise garantie après coupure réseau</th><td class="p" data-i18n="v7.cmp.r5a">À développer</td><td class="p" data-i18n="v7.cmp.var">Variable</td><td class="p" data-i18n="v7.cmp.var">Variable</td><td class="me y">✓</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-  <div class="wrap section">
-    <div class="sec-head">
-      <p class="eyebrow" data-i18n="v7.go.k">Démarrer</p>
-      <h2 data-i18n="v7.go.h">De la sandbox à la production, en trois étapes.</h2>
-    </div>
-    <ol class="go">
-      <li><span>1</span><h3 data-i18n="v7.go.1h">Échange de 30 minutes</h3><p data-i18n="v7.go.1p">Vos caisses, vos pays, les PSP de vos marchands. Nous vérifions ensemble la couverture du catalogue.</p></li>
-      <li><span>2</span><h3 data-i18n="v7.go.2h">Sandbox</h3><p data-i18n="v7.go.2p">Clés de test, SDK et simulateurs de panne. Votre équipe encaisse son premier paiement de test.</p></li>
-      <li><span>3</span><h3 data-i18n="v7.go.3h">Production</h3><p data-i18n="v7.go.3p">Activation des PSP par point de vente, suivi du premier paiement réel avec nos ingénieurs.</p></li>
-    </ol>
-    <div class="go-cta"><button class="btn" type="button" data-contact="software" data-i18n="v7.go.cta">Réserver l'échange</button></div>
-  </div>
 
   <div class="wrap section">
     <div class="sec-head">
@@ -229,14 +262,14 @@
     <div class="models">
       <article>
         <h3 data-i18n="v8.md.1h">Éditeurs</h3>
-        <p class="md-big" data-i18n="v8.md.1b">Abonnement par terminal actif</p>
-        <ul><li data-i18n="v8.md.1a">Aucun frais par transaction</li><li data-i18n="v8.md.1c">Tout le catalogue inclus</li><li data-i18n="v8.md.1d">Revendez-le dans votre offre, à votre prix</li></ul>
+        <p class="md-big" data-i18n="v8.md.1b">Une part de chaque paiement</p>
+        <ul><li data-i18n="v8.md.1a">Aucun abonnement obligatoire</li><li data-i18n="v8.md.1c">Tout le catalogue inclus</li><li data-i18n="v8.md.1d">Vos marchands gardent leur PSP</li></ul>
         <button class="btn" type="button" data-contact="software" data-i18n="v6.cta.sw">Je suis éditeur</button>
       </article>
       <article class="hl-card">
         <h3 data-i18n="v8.md.2h">PSP et acquéreurs</h3>
-        <p class="md-big" data-i18n="v8.md.2b">Programme de distribution</p>
-        <ul><li data-i18n="v8.md.2a">Proposez Meridian aux éditeurs de votre réseau</li><li data-i18n="v8.md.2c">Chaque caisse connectée vous apporte des marchands</li><li data-i18n="v8.md.2d">Contrat, fonds et commission restent chez vous</li></ul>
+        <p class="md-big" data-i18n="v8.md.2b">Commission de distribution</p>
+        <ul><li data-i18n="v8.md.2a">Même barème publié pour tous les PSP</li><li data-i18n="v8.md.2c">Payée seulement sur le volume apporté</li><li data-i18n="v8.md.2d">Contrat, fonds et commission restent chez vous</li></ul>
         <button class="btn" type="button" data-contact="psp" data-i18n="v6.cta.psp">Je suis PSP</button>
       </article>
       <article>
@@ -245,6 +278,21 @@
         <ul><li data-i18n="v8.md.3a">Déployez Meridian chez vos clients marchands</li><li data-i18n="v8.md.3c">Un seul paramétrage, quel que soit le PSP</li><li data-i18n="v8.md.3d">Console multi-points de vente</li></ul>
         <button class="btn ghost" type="button" data-contact="other" data-i18n="v7.nav.cta">Nous contacter</button>
       </article>
+    </div>
+
+    <div class="calc" id="calc">
+      <div class="calc-in">
+        <p class="eyebrow" data-i18n="calc.k">Simulateur éditeur</p>
+        <h3 data-i18n="calc.h">Ce que les paiements de vos marchands peuvent vous rapporter.</h3>
+        <label><span data-i18n="calc.t">Terminaux actifs</span><output id="cTo">200</output><input id="cT" type="range" min="10" max="5000" step="10" value="200"></label>
+        <label><span data-i18n="calc.v">Volume mensuel par terminal</span><output id="cVo">20 000 €</output><input id="cV" type="range" min="1000" max="100000" step="1000" value="20000"></label>
+        <label><span data-i18n="calc.s">Votre part, en points de base</span><output id="cSo">5</output><input id="cS" type="range" min="1" max="20" step="1" value="5"></label>
+      </div>
+      <div class="calc-out" aria-live="polite">
+        <p data-i18n="calc.r">Revenu annuel estimé</p>
+        <p class="calc-num" id="cR">24 000 €</p>
+        <p class="calc-note" data-i18n="calc.n">Simulation indicative. Le barème est fixé avec les partenaires du programme pilote. Un point de base vaut 0,01 % du volume.</p>
+      </div>
     </div>
   </div>
 
@@ -274,6 +322,8 @@
       <details><summary data-i18n="faq.3.q">Que se passe-t-il si Meridian tombe ?</summary><p data-i18n="faq.3.a">…</p></details>
       <details><summary data-i18n="faq.4.q">Mes caisses Concert ou ZVT doivent-elles changer ?</summary><p data-i18n="faq.4.a">Non.</p></details>
       <details><summary data-i18n="faq.6.q">Qui paie, et comment ?</summary><p data-i18n="faq.6.a">…</p></details>
+      <details><summary data-i18n="faq.7.q">Que garantit Meridian ?</summary><p data-i18n="faq.7.a">…</p></details>
+      <details><summary data-i18n="faq.8.q">Meridian est-il multi-acquéreur ?</summary><p data-i18n="faq.8.a">Non. Meridian est un connecteur et un catalogue : l'éditeur ou le marchand choisit le PSP de chaque caisse dans le catalogue et le branche, avec un PSP de secours facultatif utilisé seulement si le premier est injoignable. Meridian ne choisit jamais le PSP à la place du marchand.</p></details>
     </div>
   </div>
 

@@ -83,6 +83,26 @@ for (const mode of ['memory', 'postgres'] as const) {
       expect((await post({ ...ok, website: 'http://spam' })).status).toBe(400);
     });
 
+    it('PSP de la caisse et rapprochement : chaque paiement terminé concorde avec le PSP', async () => {
+      const h = { authorization: `Bearer ${KEY}`, 'content-type': 'application/json' };
+      const pos = await (await fetch(`${base}/v1/pos`, { method: 'POST', headers: h, body: JSON.stringify({ label: 'Caisse rapprochement', country: 'FR' }) })).json();
+      const stripe = { moduleId: 'stripe-terminal', config: { secretKey: 'sk_test_sim', readerId: 'tmr_sim_FR' }, baseUrl: sims.stripeUrl };
+      const put = (body: unknown) => fetch(`${base}/v1/pos/${pos.id}/psp`, { method: 'PUT', headers: h, body: JSON.stringify(body) });
+      expect((await put({ primary: stripe, fallback: stripe })).status).toBe(422);
+      expect((await put({ primary: stripe })).status).toBe(200);
+      const m = new Meridian({ apiKey: KEY, posId: pos.id, baseUrl: base });
+      for (const [i, amount] of [60_000, 1000].entries()) {
+        const ref = `REC-${mode}-${Date.now()}-${i}`;
+        await m.pay({ reference: ref, amount, currency: 'EUR' });
+        expect(await m.waitForFinal(ref, { timeoutMs: 10_000 })).toMatchObject({ state: 'authorized', module: 'stripe-terminal' });
+      }
+      expect(JSON.stringify(await (await fetch(`${base}/v1/audit`, { headers: h })).json())).not.toContain('sk_test_sim');
+      const rec = await (await fetch(`${base}/v1/reconcile`, { method: 'POST', headers: h, body: JSON.stringify({ posId: pos.id }) })).json();
+      expect(rec).toMatchObject({ count: 2, mismatches: 0 });
+      expect(rec.rows.map((r: { meridian: string; psp: string }) => `${r.meridian}/${r.psp}`)).toEqual(['authorized/authorized', 'authorized/authorized']);
+      expect(rec.totals).toEqual([{ module: 'stripe-terminal', currency: 'EUR', authorized: 61_000, refunded: 0, count: 2 }]);
+    });
+
     it('bascule vers le secours quand Stripe est injoignable', async () => {
       await sims.stopStripe();
       const m = new Meridian({ apiKey: KEY, posId: 'pos_demo_NL', baseUrl: base });
@@ -104,9 +124,9 @@ for (const mode of ['memory', 'postgres'] as const) {
       const h = { authorization: `Bearer ${KEY}`, 'content-type': 'application/json' };
       const pos = await (await fetch(`${base}/v1/pos`, { method: 'POST', headers: h, body: JSON.stringify({ label: 'Kiosque Genève', country: 'CH' }) })).json();
       expect(pos.currency).toBe('CHF');
-      const bad = await fetch(`${base}/v1/pos/${pos.id}/routing`, { method: 'PUT', headers: h, body: JSON.stringify({ primary: { moduleId: 'stripe-terminal', config: { secretKey: 'sk_test_x', readerId: 'tmr_x' } } }) });
+      const bad = await fetch(`${base}/v1/pos/${pos.id}/psp`, { method: 'PUT', headers: h, body: JSON.stringify({ primary: { moduleId: 'stripe-terminal', config: { secretKey: 'sk_test_x', readerId: 'tmr_x' } } }) });
       expect(bad.status).toBe(422);
-      const ok = await fetch(`${base}/v1/pos/${pos.id}/routing`, { method: 'PUT', headers: h, body: JSON.stringify({ primary: { moduleId: 'psp-secours', config: { apiKey: 'sim' }, baseUrl: sims.secoursUrl } }) });
+      const ok = await fetch(`${base}/v1/pos/${pos.id}/psp`, { method: 'PUT', headers: h, body: JSON.stringify({ primary: { moduleId: 'psp-secours', config: { apiKey: 'sim' }, baseUrl: sims.secoursUrl } }) });
       expect(ok.status).toBe(200);
       const m = new Meridian({ apiKey: KEY, posId: pos.id, baseUrl: base });
       await m.pay({ reference: `CHF-${Date.now()}`, amount: 1290, currency: 'CHF' });
@@ -116,13 +136,13 @@ for (const mode of ['memory', 'postgres'] as const) {
     it('journal d\'audit : actions d\'administration tracées, sans aucun secret ; échec d\'authentification tracé', async () => {
       const h = { authorization: `Bearer ${KEY}`, 'content-type': 'application/json' };
       const pos = await (await fetch(`${base}/v1/pos`, { method: 'POST', headers: h, body: JSON.stringify({ label: 'Audit', country: 'FR' }) })).json();
-      await fetch(`${base}/v1/pos/${pos.id}/routing`, { method: 'PUT', headers: h, body: JSON.stringify({ primary: { moduleId: 'psp-secours', config: { apiKey: 'secret-ne-doit-pas-apparaitre' }, baseUrl: sims.secoursUrl } }) });
+      await fetch(`${base}/v1/pos/${pos.id}/psp`, { method: 'PUT', headers: h, body: JSON.stringify({ primary: { moduleId: 'psp-secours', config: { apiKey: 'secret-ne-doit-pas-apparaitre' }, baseUrl: sims.secoursUrl } }) });
       await fetch(`${base}/v1/pos`, { headers: { authorization: 'Bearer mk_test_inconnue000' } });
       const log = await (await fetch(`${base}/v1/audit?limit=50`, { headers: h })).json();
       const mine = log.filter((e: { target: string }) => e.target === pos.id).map((e: { action: string }) => e.action);
-      expect(mine).toEqual(expect.arrayContaining(['pos.created', 'pos.routing_changed']));
+      expect(mine).toEqual(expect.arrayContaining(['pos.created', 'pos.psp_changed']));
       expect(JSON.stringify(log)).not.toContain('secret-ne-doit-pas-apparaitre');
-      expect(log.find((e: { action: string }) => e.action === 'pos.routing_changed').detail).toEqual({ primary: 'psp-secours', fallback: null });
+      expect(log.find((e: { action: string }) => e.action === 'pos.psp_changed').detail).toEqual({ primary: 'psp-secours', fallback: null });
       if (mode === 'postgres') {
         const p = new pg.Pool({ connectionString: dbUrl });
         expect((await p.query("SELECT count(*)::int AS n FROM audit_log WHERE action='auth.failed'")).rows[0].n).toBeGreaterThan(0);
@@ -183,9 +203,25 @@ for (const mode of ['memory', 'postgres'] as const) {
       expect((await fetch(`${base}/fr/nexistepas/`, { headers: { accept: 'text/html' } })).status).toBe(404);
       expect((await fetch(`${base}/portal/console.html`)).status).toBe(200);
       const map = await (await fetch(`${base}/sitemap.xml`)).text();
-      expect(map.match(/<url>/g)!.length).toBe(44);
+      expect(map.match(/<url>/g)!.length).toBe(46);
       expect(await (await fetch(`${base}/robots.txt`)).text()).toContain(`Sitemap: ${base}/sitemap.xml`);
       expect(await (await fetch(`${base}/.well-known/security.txt`)).text()).toMatch(/^Contact: mailto:security@/);
+    });
+
+    it('statut public des PSP : sans authentification, sans volumes, page FR et EN', async () => {
+      const r = await fetch(`${base}/v1/status`);
+      expect(r.status).toBe(200);
+      const j = await r.json();
+      expect(j.modules.map((m: { module: string }) => m.module)).toContain('stripe-terminal');
+      expect(j.modules.map((m: { module: string }) => m.module)).not.toContain('psp-secours');
+      expect(JSON.stringify(j)).not.toMatch(/pos_|"amount"/);
+      const llms = await (await fetch(`${base}/llms.txt`)).text();
+      expect(llms).toMatch(/^# Meridian/);
+      expect(llms).not.toContain('{{BASE}}');
+      for (const u of ['/fr/statut/', '/en/status/']) {
+        const page = await (await fetch(`${base}${u}`)).text();
+        expect(page).toContain('id="psp-status"');
+      }
     });
 
     it('mesure d\'audience : compteurs anonymes, lecture protégée', async () => {

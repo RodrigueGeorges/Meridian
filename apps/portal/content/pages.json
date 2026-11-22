@@ -139,6 +139,21 @@
   "todo": true
  },
  {
+  "id": "status",
+  "slug": {
+   "fr": "statut",
+   "en": "status"
+  },
+  "title": {
+   "fr": "Statut des PSP",
+   "en": "PSP status"
+  },
+  "desc": {
+   "fr": "Taux de réponse et délai moyen de chaque PSP du catalogue, mesurés sur les paiements réels passés par Meridian.",
+   "en": "Response rate and average time of each PSP in the catalogue, measured on real payments through Meridian."
+  }
+ },
+ {
   "id": "accessibility",
   "slug": {
    "fr": "accessibilite",

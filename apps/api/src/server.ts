@@ -1,6 +1,7 @@
 // API publique Meridian : 5 appels de paiement, points de vente, catalogue. Le moteur tourne dans le même process
 // (worker intégré) et reprend les paiements inachevés au démarrage.
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fastifyCompress from '@fastify/compress';
@@ -8,6 +9,9 @@ import fastifyHelmet from '@fastify/helmet';
 import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import { buildSite, pickLang, type Lang, type SiteFile } from '../../portal/build.ts';
+import { MIN_SAMPLE, StatusBoard } from './status.ts';
+import { EdgeRelay } from './edge.ts';
+import fastifyWebsocket from '@fastify/websocket';
 import { z, ZodError } from 'zod';
 import { COUNTRIES, isCurrency, MeridianError, type Currency } from '@meridian/core';
 import { Engine, Journal, JsonlStore, MemoryStore, type JournalStore, type PaymentView } from '@meridian/engine';
@@ -26,7 +30,7 @@ export interface ServerOptions {
   webhookUrl?: string;
   webhookSecret?: string;
   demoSeed?: { stripeUrl: string; secoursUrl: string };
-  engine?: { pollMs?: number; retryMs?: number; payTimeoutMs?: number; scanMs?: number };
+  engine?: { pollMs?: number; retryMs?: number; payTimeoutMs?: number; scanMs?: number; httpTimeoutMs?: number };
   logger?: boolean;
   /** Derrière un proxy (Fly) : lire l'IP client dans X-Forwarded-For. Ne jamais activer sans proxy de confiance. */
   trustProxy?: boolean;
@@ -69,6 +73,9 @@ export async function buildServer(o: ServerOptions) {
     reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()');
   });
   await app.register(fastifyCompress, { global: true, threshold: 1024 });
+  await app.register(fastifyWebsocket, { options: { maxPayload: 256 * 1024 } });
+  const edge = new EdgeRelay();
+  const edgeFetch = edge.fetcher();
 
   // ---------- Stockage ----------
   let store: JournalStore;
@@ -160,6 +167,8 @@ export async function buildServer(o: ServerOptions) {
     webhookTimer.unref();
   }
   const orgOfPos = async (posId: string) => (await repo.get(posId))?.orgId;
+  const status = new StatusBoard(pool);
+  const publicModules = () => Object.values(BUILTIN_MODULES).filter((m) => m.maturity === 'available' && !m.id.startsWith('psp-secours')).map((m) => ({ id: m.id, name: m.name }));
 
   // ---------- Moteur ----------
   const engine = new Engine({
@@ -168,7 +177,12 @@ export async function buildServer(o: ServerOptions) {
     routing: (posId) => repo.routing(posId),
     cluster,
     ...o.engine,
-    onFinal: (v) => void orgOfPos(v.posId).then((org) => { if (org) void deliver(org, `payment.${v.state}`, v); }),
+    fetcher: edgeFetch,
+    onFinal: (v, meta) => {
+      void orgOfPos(v.posId).then((org) => { if (org) void deliver(org, `payment.${v.state}`, v); });
+      if (meta.fellBackFrom) void status.record(meta.fellBackFrom, false, 0).catch(() => undefined);
+      void status.record(v.module, v.state !== 'failed', meta.durationMs).catch(() => undefined);
+    },
     onRefund: (v, amount) => void orgOfPos(v.posId).then((org) => { if (org) void deliver(org, 'payment.refunded', { ...v, amount }); }),
   });
 
@@ -253,6 +267,7 @@ export async function buildServer(o: ServerOptions) {
       await pool.query("DELETE FROM rate_hits WHERE at < now() - interval '1 day'");
       await pool.query('DELETE FROM contact_requests WHERE created_at < now() - make_interval(days => $1::int)', [retentionDays]);
       await pool.query("DELETE FROM site_stats WHERE day < current_date - interval '25 months'");
+      await status.purge(90);
     } catch (e) { app.log.warn({ err: e }, 'purge'); }
   };
   void purge();
@@ -328,10 +343,14 @@ export async function buildServer(o: ServerOptions) {
   // ---------- Routes publiques ----------
   app.get('/health', async () => ({ ok: true, journal: (await engine.verify()).ok }));
   app.get('/v1/modules', async () => Object.values(BUILTIN_MODULES).map((m) => ({
-    id: m.id, name: m.name, version: m.version, kind: m.kind, capabilities: m.capabilities,
+    id: m.id, name: m.name, version: m.version, kind: m.kind, maturity: m.maturity, capabilities: m.capabilities,
     config: m.config.map((c) => ({ key: c.key, type: c.type, secret: c.secret, label: c.label })),
   })));
   app.get('/v1/countries', async () => COUNTRIES);
+  app.get('/v1/status', async (_req, reply) => {
+    reply.header('cache-control', 'public, max-age=30').header('access-control-allow-origin', '*');
+    return { generatedAt: new Date().toISOString(), minSample: MIN_SAMPLE, modules: await status.snapshot(publicModules()) };
+  });
 
   // ---------- Paiements ----------
   const PayBody = z.object({ posId: z.string(), reference: z.string().min(1).max(64), amount: z.number().int().positive(), currency: z.string().length(3), waitMs: z.number().int().min(0).max(120_000).optional() });
@@ -387,6 +406,32 @@ export async function buildServer(o: ServerOptions) {
     await ownPos(org, posId);
     return store.byReference(posId, (req.params as { reference: string }).reference);
   });
+  // Rapprochement Meridian ↔ PSP : chaque paiement terminé est redemandé au PSP ; un écart = débit sans « autorisé », ou l'inverse.
+  app.post('/v1/reconcile', async (req) => {
+    const org = await auth(req);
+    const b = z.object({ posId: z.string(), from: z.string().datetime().optional(), to: z.string().datetime().optional(), limit: z.number().int().min(1).max(200).default(100) }).parse(req.body);
+    await ownPos(org, b.posId);
+    const from = b.from ? Date.parse(b.from) : 0, to = b.to ? Date.parse(b.to) : Infinity;
+    const list = (await engine.listFresh(b.posId)).filter((p) => { const t = Date.parse(p.createdAt); return t >= from && t <= to; }).slice(0, b.limit);
+    const rows: { reference: string; amount: number; currency: string; module: string; createdAt: string; meridian: string; psp: string; match: boolean; refunded: number }[] = [];
+    for (let i = 0; i < list.length; i += 4) {
+      const chunk = await Promise.all(list.slice(i, i + 4).map((p) => engine.reconcile(b.posId, p.reference)));
+      for (const r of chunk) rows.push({ reference: r.view.reference, amount: r.view.amount, currency: r.view.currency, module: r.view.module, createdAt: r.view.createdAt, meridian: r.view.state, psp: r.psp, match: r.match, refunded: r.view.refunded });
+    }
+    const totals: Record<string, { authorized: number; refunded: number; count: number }> = {};
+    for (const r of rows) {
+      const k = `${r.module}|${r.currency}`;
+      const t = (totals[k] ??= { authorized: 0, refunded: 0, count: 0 });
+      t.count++;
+      if (r.meridian === 'authorized') { t.authorized += r.amount; t.refunded += r.refunded; }
+    }
+    await audit(req, org, 'reconcile.run', b.posId, { count: rows.length, mismatches: rows.filter((r) => !r.match).length });
+    return {
+      posId: b.posId, checkedAt: new Date().toISOString(), count: rows.length, mismatches: rows.filter((r) => !r.match).length,
+      totals: Object.entries(totals).map(([k, v]) => { const [module, currency] = k.split('|'); return { module, currency, ...v }; }),
+      rows,
+    };
+  });
   app.get('/v1/journal/verify', async (req) => {
     await auth(req);
     return engine.verify();
@@ -426,22 +471,59 @@ export async function buildServer(o: ServerOptions) {
   app.get('/v1/pos/:id', async (req) => ownPos(await auth(req), (req.params as { id: string }).id));
 
   const Binding = z.object({ moduleId: z.string(), config: z.record(z.string(), z.unknown()), baseUrl: z.string().url().optional() });
-  app.put('/v1/pos/:id/routing', async (req) => {
+  // PSP de la caisse : le PSP choisi dans le catalogue, et un PSP de secours facultatif si le premier est injoignable.
+  app.put('/v1/pos/:id/psp', async (req) => {
     const org = await auth(req);
     const pos = await ownPos(org, (req.params as { id: string }).id);
     const b = z.object({ primary: Binding, fallback: Binding.optional() }).parse(req.body);
+    if (b.fallback && b.fallback.moduleId === b.primary.moduleId) throw new MeridianError('same_psp', 'Le PSP de secours doit être différent du PSP principal', 422);
+    // Terminal du magasin : l'agent est toujours celui de l'organisation qui fait la demande (pas d'agent d'autrui).
+    for (const bind of [b.primary, b.fallback]) {
+      if (bind?.moduleId !== 'edge-terminal') continue;
+      if (!/^[A-Za-z0-9_-]{3,40}$/.test(String(bind.config.agentId ?? ''))) throw new MeridianError('invalid_agent', 'Identifiant d\'agent invalide (3 à 40 caractères : lettres, chiffres, - et _)', 422);
+      bind.config = { agentId: bind.config.agentId, orgId: org.id };
+    }
     for (const bind of [b.primary, b.fallback].filter(Boolean) as z.infer<typeof Binding>[]) {
       const def = BUILTIN_MODULES[bind.moduleId];
       if (!def) throw new MeridianError('module_not_found', `Module inconnu : ${bind.moduleId}`, 422);
       if (!def.capabilities.countries.includes(pos.country)) throw new MeridianError('module_not_available', `${def.name} n'est pas disponible pour ${pos.country}`, 422);
       if (!def.capabilities.currencies.includes(pos.currency)) throw new MeridianError('module_not_available', `${def.name} n'accepte pas ${pos.currency}`, 422);
+      if (def.maturity === 'preview' && org.mode !== 'test') throw new MeridianError('module_preview', `${def.name} n'est pas encore validé sur la sandbox du PSP : mode test uniquement`, 422);
       if (bind.baseUrl && !(o.allowTestBaseUrl && org.mode === 'test')) throw new MeridianError('base_url_forbidden', 'URL de PSP personnalisée autorisée uniquement en mode test', 403);
       new ModuleRuntime(def, bind.config); // valide les paramètres obligatoires
     }
     await repo.setRouting(pos.id, b.primary, b.fallback);
     // Jamais la configuration (identifiants PSP) : seulement les modules choisis.
-    await audit(req, org, 'pos.routing_changed', pos.id, { primary: b.primary.moduleId, fallback: b.fallback?.moduleId ?? null });
+    await audit(req, org, 'pos.psp_changed', pos.id, { primary: b.primary.moduleId, fallback: b.fallback?.moduleId ?? null });
     return { posId: pos.id, primary: b.primary.moduleId, fallback: b.fallback?.moduleId ?? null };
+  });
+  // Agents des magasins : connexion sortante authentifiée par la clé de l'organisation.
+  app.get('/v1/edge/connect', { websocket: true }, async (socket, req) => {
+    let org: Org;
+    try { org = await auth(req); } catch { socket.close(4401, 'clé invalide'); return; }
+    const agentId = String(req.headers['x-meridian-agent'] ?? '');
+    if (!/^[A-Za-z0-9_-]{3,40}$/.test(agentId)) { socket.close(4400, 'identifiant d\'agent invalide'); return; }
+    edge.attach(org.id, agentId, socket);
+    void audit(req, org, 'edge.connected', agentId, {});
+  });
+  app.get('/v1/edge/agents', async (req) => edge.agents((await auth(req)).id));
+
+  // Jeton de connexion pour le SDK du PSP sur l'appareil (Tap to Pay). Le secret du PSP ne quitte jamais Meridian.
+  app.post('/v1/pos/:id/device-token', async (req) => {
+    const org = await auth(req);
+    const pos = await ownPos(org, (req.params as { id: string }).id);
+    const r = await repo.routing(pos.id);
+    if (!r) throw new MeridianError('pos_not_configured', 'Aucun module actif', 422);
+    const { moduleId } = z.object({ moduleId: z.string().optional() }).parse(req.body ?? {});
+    const all = [r.primary, r.fallback].filter(Boolean) as typeof r.primary[];
+    const bnd = all.find((b) => (moduleId ? b.moduleId === moduleId : BUILTIN_MODULES[b.moduleId]?.deviceToken));
+    if (!bnd || !BUILTIN_MODULES[bnd.moduleId]?.deviceToken) throw new MeridianError('no_device_module', 'Aucun module d\'encaissement sur l\'appareil sur ce point de vente', 422);
+    try {
+      const secret = await new ModuleRuntime(BUILTIN_MODULES[bnd.moduleId]!, bnd.config, { baseUrlOverride: bnd.baseUrl, timeoutMs: 8000, fetcher: edgeFetch }).deviceToken();
+      return { module: bnd.moduleId, secret };
+    } catch (e) {
+      throw new MeridianError('device_token_failed', (e as Error).message, 502);
+    }
   });
   app.post('/v1/pos/:id/health', async (req) => {
     const org = await auth(req);
@@ -450,7 +532,7 @@ export async function buildServer(o: ServerOptions) {
     if (!r) throw new MeridianError('pos_not_configured', 'Aucun module actif', 422);
     const check = async (bnd: typeof r.primary) => {
       try {
-        await new ModuleRuntime(BUILTIN_MODULES[bnd.moduleId]!, bnd.config, { baseUrlOverride: bnd.baseUrl, timeoutMs: 4000 }).health();
+        await new ModuleRuntime(BUILTIN_MODULES[bnd.moduleId]!, bnd.config, { baseUrlOverride: bnd.baseUrl, timeoutMs: 4000, fetcher: edgeFetch }).health();
         return { module: bnd.moduleId, ok: true };
       } catch (e) {
         return { module: bnd.moduleId, ok: false, error: (e as Error).message };
@@ -511,6 +593,8 @@ export async function buildServer(o: ServerOptions) {
     .redirect(`/${pickLang(req.headers['accept-language'])}/`, 302));
   for (const [path, f] of site.files) app.get(path, async (req, reply) => sendFile(req, reply, f));
   for (const [from, to] of site.redirects) if (!site.files.has(from)) app.get(from, async (_req, reply) => reply.redirect(to, 301));
+  const llms = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'portal', 'content', 'llms.txt'), 'utf8');
+  app.get('/llms.txt', async (req, reply) => reply.type('text/plain; charset=utf-8').header('Cache-Control', 'public, max-age=3600').send(llms.replaceAll('{{BASE}}', base(req))));
   app.get('/robots.txt', async (req, reply) => reply.type('text/plain; charset=utf-8').header('Cache-Control', 'public, max-age=3600')
     .send(`User-agent: *\nAllow: /\nDisallow: /v1/\nDisallow: /portal/\n\nSitemap: ${base(req)}/sitemap.xml\n`));
   app.get('/sitemap.xml', async (req, reply) => {

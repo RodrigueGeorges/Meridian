@@ -1,0 +1,17 @@
+{
+  "name": "@meridian/mcp",
+  "version": "0.1.0",
+  "description": "Serveur MCP Meridian : un assistant de code interroge et teste l'API Meridian (lecture partout, écriture en mode test seulement).",
+  "type": "module",
+  "license": "UNLICENSED",
+  "bin": {
+    "meridian-mcp": "./src/main.ts"
+  },
+  "exports": {
+    ".": "./src/server.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1",
+    "zod": "4.6.6"
+  }
+}

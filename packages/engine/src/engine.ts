@@ -21,6 +21,14 @@ export interface PosRouting {
   primary: ModuleBinding;
   fallback?: ModuleBinding;
 }
+
+/** Retrouve la configuration d'un module branché sur ce point de vente (principal ou secours). */
+function bindingOf(r: PosRouting | undefined, moduleId: string): ModuleBinding | undefined {
+  if (!r) return undefined;
+  if (r.primary.moduleId === moduleId) return r.primary;
+  if (r.fallback?.moduleId === moduleId) return r.fallback;
+  return undefined;
+}
 export type RoutingResolver = (posId: string) => Promise<PosRouting | undefined>;
 
 export interface PaymentView {
@@ -32,6 +40,9 @@ export interface PaymentView {
   detail?: string;
   module: string;
   refunded: number;
+  createdAt: string;
+  /** Données pour encaisser sur l'appareil (Tap to Pay) : secret client du paiement. */
+  device?: Record<string, unknown>;
 }
 
 interface Tx {
@@ -40,7 +51,12 @@ interface Tx {
   amount: number;
   currency: Currency;
   binding: ModuleBinding;
+  /** PSP de secours du point de vente au moment du paiement. */
+  fallback?: ModuleBinding;
   usingFallback: boolean;
+  fellBackFrom?: string;
+  /** Étape peut-être reçue par le PSP sans confirmation : à vérifier avant tout renvoi si le module n'est pas idempotent. */
+  inDoubt: boolean;
   vars: Record<string, unknown>;
   step: number;
   state: PaymentState;
@@ -67,7 +83,8 @@ export interface Cluster {
 }
 
 export interface EngineEvents {
-  onFinal?: (view: PaymentView) => void;
+  /** `meta` : durée depuis la création et module principal abandonné après bascule, pour la page de statut. */
+  onFinal?: (view: PaymentView, meta: { durationMs: number; fellBackFrom?: string }) => void;
   onRefund?: (view: PaymentView, amount: number) => void;
 }
 
@@ -123,8 +140,8 @@ export class Engine {
     this.module(routing.primary.moduleId); // vérifie que le module existe
 
     const tx: Tx = {
-      posId, reference, amount, currency: currency as Currency, binding: routing.primary, usingFallback: false,
-      vars: {}, step: 0, state: 'created', cancelRequested: false, cancelSent: false, refunds: [], startedAt: Date.now(), waiters: [], driving: true,
+      posId, reference, amount, currency: currency as Currency, binding: routing.primary, fallback: routing.fallback, usingFallback: false,
+      vars: {}, step: 0, state: 'created', inDoubt: false, cancelRequested: false, cancelSent: false, refunds: [], startedAt: Date.now(), waiters: [], driving: true,
     };
     this.txs.set(key(posId, reference), tx);
     this.activeByPos.set(posId, reference);
@@ -185,8 +202,9 @@ export class Engine {
     if (total + amount > tx.amount) throw new MeridianError('refund_exceeds_amount', 'Le cumul des remboursements dépasse le montant payé', 400);
     const rt = this.runtime(tx);
     try {
-      await rt.refund(this.ctx(tx), tx.vars, amount, n);
+      await rt.refund(this.ctx(tx), tx.vars, amount, n, tx.receipt);
     } catch (e) {
+      if (e instanceof NetError && !rt.canReplaySafely) throw new MeridianError('refund_unknown', 'Issue inconnue et PSP sans idempotence : vérifiez le remboursement chez le PSP avant toute nouvelle demande', 503);
       if (e instanceof NetError) throw new MeridianError('refund_pending', 'Issue inconnue : renvoyez la même demande avec le même refundNumber', 503);
       throw new MeridianError('refund_failed', (e as Error).message, 502);
     }
@@ -194,6 +212,26 @@ export class Engine {
     await this.o.journal.append({ posId, reference, type: 'refund', data: { n, amount } });
     this.o.onRefund?.(this.view(tx), amount);
     return this.view(tx);
+  }
+
+  /**
+   * Rapprochement : redemande au PSP l'état d'un paiement terminé et le compare au journal.
+   * `not_sent` : le paiement n'a jamais atteint le PSP (rien à rapprocher).
+   */
+  async reconcile(posId: string, reference: string): Promise<{ view: PaymentView; psp: FinalState | 'pending' | 'not_sent' | 'unreachable'; match: boolean }> {
+    const tx = await this.fresh(posId, reference);
+    const view = this.view(tx);
+    if (!isFinal(tx.state)) return { view, psp: 'pending', match: true };
+    if (tx.step === 0 && Object.keys(tx.vars).length === 0) return { view, psp: 'not_sent', match: true };
+    try {
+      const r = await this.runtime(tx).status(this.ctx(tx), tx.vars);
+      // Rapprochement sur l'argent : débité chez le PSP si et seulement si « autorisé » dans le journal.
+      // Refusé, annulé ou échoué sont équivalents (aucun débit) ; leur libellé peut différer d'un PSP à l'autre.
+      const match = (r.state === 'authorized') === (tx.state === 'authorized');
+      return { view, psp: r.state, match };
+    } catch {
+      return { view, psp: 'unreachable', match: false };
+    }
   }
 
   receipt(posId: string, reference: string): Receipt {
@@ -243,16 +281,18 @@ export class Engine {
     const d = created.data as { amount: number; currency: Currency; module: string };
     const tx: Tx = {
       posId: created.posId, reference: created.reference, amount: d.amount, currency: d.currency,
-      binding: routing?.primary.moduleId === d.module ? routing.primary : { moduleId: d.module, config: {} },
-      usingFallback: false, vars: {}, step: 0, state: 'pending', cancelRequested: false, cancelSent: false,
+      binding: bindingOf(routing, d.module) ?? { moduleId: d.module, config: {} },
+      fallback: routing?.fallback?.moduleId === d.module ? undefined : routing?.fallback,
+      usingFallback: false, inDoubt: true, vars: {}, step: 0, state: 'pending', cancelRequested: false, cancelSent: false,
       refunds: [], startedAt: Date.parse(created.ts), waiters: [], driving: false,
     };
     for (const e of list) {
       if (e.type === 'step') {
         tx.step++;
         Object.assign(tx.vars, (e.data as { vars?: Record<string, unknown> }).vars ?? {});
-      } else if (e.type === 'fallback' && routing?.fallback) {
-        tx.binding = routing.fallback; tx.usingFallback = true; tx.vars = {}; tx.step = 0;
+      } else if (e.type === 'fallback' && tx.fallback) {
+        tx.fellBackFrom = (e.data as { from?: string }).from;
+        tx.binding = tx.fallback; tx.usingFallback = true; tx.vars = {}; tx.step = 0;
       } else if (e.type === 'cancel_requested') tx.cancelRequested = true;
       else if (e.type === 'cancel_sent' || e.type === 'cancel_refused') tx.cancelSent = true;
       else if (e.type === 'refund') {
@@ -381,23 +421,49 @@ export class Engine {
     while (this.alive && tx.step < this.runtime(tx).steps.length) {
       if (tx.cancelRequested && tx.step === 0) return this.finish(tx, 'cancelled', 'cancelled_before_send', {});
       const rt = this.runtime(tx);
+      // PSP sans clé d'idempotence : une étape peut-être reçue n'est renvoyée qu'après avoir vérifié qu'elle ne l'a pas été.
+      if (tx.inDoubt && !rt.canReplaySafely && rt.def.lookup) {
+        let found: Record<string, unknown> | null;
+        try {
+          found = await rt.lookup(this.ctx(tx));
+        } catch (e) {
+          if (!this.alive) return;
+          if (e instanceof NetError || (e instanceof RemoteError && e.status >= 500)) { await netError('lookup'); continue; }
+          throw e;
+        }
+        if (!this.alive) return;
+        if (found) {
+          const saved = Object.fromEntries(Object.entries(found).filter(([k]) => !k.startsWith('_')));
+          Object.assign(tx.vars, saved);
+          tx.inDoubt = false; netStreak = false;
+          await this.o.journal.append({ posId: tx.posId, reference: tx.reference, type: 'step', data: { step: rt.steps[tx.step]!.id, vars: saved, via: 'lookup' } });
+          tx.step++;
+          continue;
+        }
+        tx.inDoubt = false;
+      }
       try {
+        if (!rt.canReplaySafely) tx.inDoubt = true;
         const saved = await rt.runStep(tx.step, this.ctx(tx), tx.vars);
         if (!this.alive) return;
+        tx.inDoubt = false;
         Object.assign(tx.vars, saved);
         netStreak = false;
         await this.o.journal.append({ posId: tx.posId, reference: tx.reference, type: 'step', data: { step: rt.steps[tx.step]!.id, vars: saved } });
         tx.step++;
       } catch (e) {
         if (!this.alive) return;
+        // Connexion refusée ou erreur renvoyée par le PSP : on sait si l'étape a été reçue.
+        if ((e instanceof NetError && e.refused) || e instanceof RemoteError) tx.inDoubt = false;
         if (e instanceof NetError) {
-          const routing = await this.o.routing(tx.posId);
-          if (e.refused && tx.step === 0 && !tx.usingFallback && routing?.fallback) {
-            tx.binding = routing.fallback; tx.usingFallback = true; tx.vars = {};
-            await this.o.journal.append({ posId: tx.posId, reference: tx.reference, type: 'fallback', data: { from: routing.primary.moduleId, to: routing.fallback.moduleId, reason: 'connexion refusée avant tout envoi' } });
+          if (e.refused && tx.step === 0 && !tx.usingFallback && tx.fallback) {
+            const from = tx.binding.moduleId;
+            tx.binding = tx.fallback; tx.usingFallback = true; tx.vars = {}; tx.fellBackFrom = from;
+            await this.o.journal.append({ posId: tx.posId, reference: tx.reference, type: 'fallback', data: { from, to: tx.fallback.moduleId, reason: 'connexion refusée avant tout envoi' } });
             continue;
           }
-          if (Date.now() > deadline() && tx.step === 0) return this.finish(tx, 'failed', 'psp_unreachable', {});
+          // Jamais « échec » si le PSP a peut-être reçu la demande : on continue de vérifier.
+          if (Date.now() > deadline() && tx.step === 0 && !tx.inDoubt) return this.finish(tx, 'failed', 'psp_unreachable', {});
           await netError(rt.steps[tx.step]!.id);
           continue;
         }
@@ -468,7 +534,7 @@ export class Engine {
     tx.detail = detail;
     if (this.activeByPos.get(tx.posId) === tx.reference) this.activeByPos.delete(tx.posId);
     tx.waiters.splice(0).forEach((w) => w());
-    this.o.onFinal?.(this.view(tx));
+    this.o.onFinal?.(this.view(tx), { durationMs: Date.now() - tx.startedAt, fellBackFrom: tx.fellBackFrom });
   }
 
   // ---------------- Utilitaires ----------------
@@ -495,6 +561,15 @@ export class Engine {
     return {
       posId: tx.posId, reference: tx.reference, amount: tx.amount, currency: tx.currency, state: tx.state,
       detail: tx.detail, module: tx.binding.moduleId, refunded: tx.refunds.reduce((s, r) => s + r.amount, 0),
+      createdAt: new Date(tx.startedAt).toISOString(),
+      ...(isFinal(tx.state) ? {} : this.deviceOf(tx)),
     };
+  }
+
+  private deviceOf(tx: Tx): { device?: Record<string, unknown> } {
+    const def = this.o.modules[tx.binding.moduleId];
+    if (!def?.exposeVars?.length) return {};
+    const device = Object.fromEntries(def.exposeVars.filter((k) => tx.vars[k] !== undefined).map((k) => [k, tx.vars[k]]));
+    return Object.keys(device).length ? { device } : {};
   }
 }

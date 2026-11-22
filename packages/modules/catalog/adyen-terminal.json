@@ -1,0 +1,274 @@
+{
+  "id": "adyen-terminal",
+  "name": "Adyen Terminal API (cloud)",
+  "version": "0.1.0",
+  "maturity": "preview",
+  "kind": "acceptance_and_acquiring",
+  "baseUrl": "https://terminal-api-test.adyen.com",
+  "config": [
+    {
+      "key": "apiKey",
+      "type": "string",
+      "secret": true,
+      "label": "Clé API Adyen"
+    },
+    {
+      "key": "poiId",
+      "type": "string",
+      "label": "Identifiant du terminal (POIID, ex. V400m-123456789)"
+    },
+    {
+      "key": "saleId",
+      "type": "string",
+      "label": "Identifiant de la caisse (SaleID)"
+    }
+  ],
+  "auth": {
+    "header": "x-API-key",
+    "value": "{{config.apiKey}}"
+  },
+  "encoding": "json",
+  "errorCodePath": "errorCode",
+  "lookup": {
+    "method": "POST",
+    "path": "/sync",
+    "body": {
+      "SaleToPOIRequest": {
+        "MessageHeader": {
+          "ProtocolVersion": "3.0",
+          "MessageClass": "Service",
+          "MessageCategory": "TransactionStatus",
+          "MessageType": "Request",
+          "SaleID": "{{config.saleId}}",
+          "ServiceID": "{{now.nonce}}",
+          "POIID": "{{config.poiId}}"
+        },
+        "TransactionStatusRequest": {
+          "ReceiptReprintFlag": false,
+          "MessageReference": {
+            "SaleID": "{{config.saleId}}",
+            "ServiceID": "{{tx.serviceId}}",
+            "MessageCategory": "Payment"
+          }
+        }
+      }
+    },
+    "pick": {
+      "serviceId": "SaleToPOIResponse.TransactionStatusResponse.RepeatedMessageResponse.MessageHeader.ServiceID",
+      "condition": "SaleToPOIResponse.TransactionStatusResponse.Response.ErrorCondition"
+    },
+    "notFound": [
+      {
+        "path": "SaleToPOIResponse.TransactionStatusResponse.Response.ErrorCondition",
+        "equals": "NotFound"
+      }
+    ]
+  },
+  "pay": {
+    "steps": [
+      {
+        "id": "payment",
+        "method": "POST",
+        "path": "/async",
+        "acceptText": true,
+        "body": {
+          "SaleToPOIRequest": {
+            "MessageHeader": {
+              "ProtocolVersion": "3.0",
+              "MessageClass": "Service",
+              "MessageCategory": "Payment",
+              "MessageType": "Request",
+              "SaleID": "{{config.saleId}}",
+              "ServiceID": "{{tx.serviceId}}",
+              "POIID": "{{config.poiId}}"
+            },
+            "PaymentRequest": {
+              "SaleData": {
+                "SaleTransactionID": {
+                  "TransactionID": "{{tx.reference}}",
+                  "TimeStamp": "{{now.iso}}"
+                }
+              },
+              "PaymentTransaction": {
+                "AmountsReq": {
+                  "Currency": "{{tx.currency}}",
+                  "RequestedAmount": "{{tx.amountMajor}}"
+                }
+              }
+            }
+          }
+        }
+      }
+    ]
+  },
+  "status": {
+    "sources": {
+      "s": {
+        "method": "POST",
+        "path": "/sync",
+        "body": {
+          "SaleToPOIRequest": {
+            "MessageHeader": {
+              "ProtocolVersion": "3.0",
+              "MessageClass": "Service",
+              "MessageCategory": "TransactionStatus",
+              "MessageType": "Request",
+              "SaleID": "{{config.saleId}}",
+              "ServiceID": "{{now.nonce}}",
+              "POIID": "{{config.poiId}}"
+            },
+            "TransactionStatusRequest": {
+              "ReceiptReprintFlag": false,
+              "MessageReference": {
+                "SaleID": "{{config.saleId}}",
+                "ServiceID": "{{tx.serviceId}}",
+                "MessageCategory": "Payment"
+              }
+            }
+          }
+        }
+      }
+    },
+    "rules": [
+      {
+        "when": [
+          {
+            "path": "s.SaleToPOIResponse.TransactionStatusResponse.RepeatedMessageResponse.RepeatedResponseMessageBody.PaymentResponse.Response.Result",
+            "equals": "Success"
+          }
+        ],
+        "state": "authorized"
+      },
+      {
+        "when": [
+          {
+            "path": "s.SaleToPOIResponse.TransactionStatusResponse.RepeatedMessageResponse.RepeatedResponseMessageBody.PaymentResponse.Response.Result",
+            "equals": "Failure"
+          },
+          {
+            "path": "s.SaleToPOIResponse.TransactionStatusResponse.RepeatedMessageResponse.RepeatedResponseMessageBody.PaymentResponse.Response.ErrorCondition",
+            "equals": "Cancel"
+          }
+        ],
+        "state": "cancelled"
+      },
+      {
+        "when": [
+          {
+            "path": "s.SaleToPOIResponse.TransactionStatusResponse.RepeatedMessageResponse.RepeatedResponseMessageBody.PaymentResponse.Response.Result",
+            "equals": "Failure"
+          }
+        ],
+        "state": "declined",
+        "detailPath": "s.SaleToPOIResponse.TransactionStatusResponse.RepeatedMessageResponse.RepeatedResponseMessageBody.PaymentResponse.Response.ErrorCondition"
+      }
+    ]
+  },
+  "cancel": {
+    "method": "POST",
+    "path": "/async",
+    "acceptText": true,
+    "body": {
+      "SaleToPOIRequest": {
+        "MessageHeader": {
+          "ProtocolVersion": "3.0",
+          "MessageClass": "Service",
+          "MessageCategory": "Abort",
+          "MessageType": "Request",
+          "SaleID": "{{config.saleId}}",
+          "ServiceID": "{{now.nonce}}",
+          "POIID": "{{config.poiId}}"
+        },
+        "AbortRequest": {
+          "AbortReason": "MerchantAbort",
+          "MessageReference": {
+            "SaleID": "{{config.saleId}}",
+            "ServiceID": "{{tx.serviceId}}",
+            "MessageCategory": "Payment",
+            "POIID": "{{config.poiId}}"
+          }
+        }
+      }
+    },
+    "busyCodes": []
+  },
+  "refund": {
+    "method": "POST",
+    "path": "/sync",
+    "body": {
+      "SaleToPOIRequest": {
+        "MessageHeader": {
+          "ProtocolVersion": "3.0",
+          "MessageClass": "Service",
+          "MessageCategory": "Reversal",
+          "MessageType": "Request",
+          "SaleID": "{{config.saleId}}",
+          "ServiceID": "{{now.nonce}}",
+          "POIID": "{{config.poiId}}"
+        },
+        "ReversalRequest": {
+          "OriginalPOITransaction": {
+            "POITransactionID": {
+              "TransactionID": "{{receipt.poiTransactionId}}",
+              "TimeStamp": "{{receipt.poiTimeStamp}}"
+            }
+          },
+          "ReversalReason": "MerchantCancel",
+          "ReversedAmount": "{{refund.amountMajor}}"
+        }
+      }
+    }
+  },
+  "receipt": {
+    "brand": "s.SaleToPOIResponse.TransactionStatusResponse.RepeatedMessageResponse.RepeatedResponseMessageBody.PaymentResponse.PaymentResult.PaymentInstrumentData.CardData.PaymentBrand",
+    "maskedPan": "s.SaleToPOIResponse.TransactionStatusResponse.RepeatedMessageResponse.RepeatedResponseMessageBody.PaymentResponse.PaymentResult.PaymentInstrumentData.CardData.MaskedPan",
+    "poiTransactionId": "s.SaleToPOIResponse.TransactionStatusResponse.RepeatedMessageResponse.RepeatedResponseMessageBody.PaymentResponse.POIData.POITransactionID.TransactionID",
+    "poiTimeStamp": "s.SaleToPOIResponse.TransactionStatusResponse.RepeatedMessageResponse.RepeatedResponseMessageBody.PaymentResponse.POIData.POITransactionID.TimeStamp"
+  },
+  "capabilities": {
+    "countries": [
+      "FR",
+      "BE",
+      "NL",
+      "DE",
+      "ES",
+      "IT",
+      "AT",
+      "CH"
+    ],
+    "currencies": [
+      "EUR",
+      "CHF"
+    ],
+    "paymentMethods": {
+      "*": [
+        "visa",
+        "mastercard",
+        "amex",
+        "maestro"
+      ],
+      "FR": [
+        "cb"
+      ],
+      "BE": [
+        "bancontact"
+      ],
+      "DE": [
+        "girocard"
+      ]
+    },
+    "partialRefund": true,
+    "cancelDuringAuth": true,
+    "languages": [
+      "fr",
+      "en",
+      "de",
+      "es",
+      "it",
+      "nl"
+    ],
+    "compatProtocols": [
+      "nexo"
+    ]
+  }
+}

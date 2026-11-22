@@ -108,7 +108,7 @@ export function buildSite(): Site {
     const link = (id: string, label: string) => `<a href="${url(l, id)}"${en(id)}>${esc(label)}</a>`;
     const cols = document.createElement('div');
     cols.className = 'ft-cols';
-    cols.innerHTML = `<nav aria-label="${esc(d['ft.h.product']!)}"><p class="ft-h">${esc(d['ft.h.product']!)}</p>${link('software', d['nav.software']!)}${link('psp', d['nav.psp']!)}${link('demo', d['nav.demo']!)}${link('developers', d['nav.docs']!)}${link('security', d['ft.l.security']!)}${link('stripe', d['ft.l.stripe']!)}</nav>`
+    cols.innerHTML = `<nav aria-label="${esc(d['ft.h.product']!)}"><p class="ft-h">${esc(d['ft.h.product']!)}</p>${link('software', d['nav.software']!)}${link('psp', d['nav.psp']!)}${link('demo', d['nav.demo']!)}${link('developers', d['nav.docs']!)}${link('security', d['ft.l.security']!)}${link('stripe', d['ft.l.stripe']!)}${link('status', d['ft.l.status']!)}</nav>`
       + `<nav aria-label="${esc(d['ft.h.protocols']!)}"><p class="ft-h">${esc(d['ft.h.protocols']!)}</p>${link('concert', 'Concert (Caisse-AP)')}${link('zvt', 'ZVT')}${link('nexo', 'nexo Retailer')}</nav>`
       + `<nav aria-label="${esc(d['ft.l.nav']!)}"><p class="ft-h">${esc(d['ft.l.nav']!)}</p>${link('legal', d['ft.l.notice']!)}${link('privacy', d['ft.l.privacy']!)}${link('accessibility', d['ft.l.a11y']!)}${link('contact', d['ft.l.contact']!)}</nav>`
       + (d['ft.en'] ? `<p class="ft-small ft-note">${esc(d['ft.l.security']!)}, ${esc(d['nav.docs']!)}, ${esc(d['ft.h.protocols']!)} : ${esc(d['ft.en']!)}</p>` : '');

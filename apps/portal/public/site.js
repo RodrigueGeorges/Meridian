@@ -65,6 +65,7 @@
     }
     renderCoverage();
     renderTicket(lastRun);
+    calcUpdate();
     setMode();
     filterStore();
   }
@@ -237,6 +238,60 @@
     });
   }
 
+  // ---------- Simulateur de revenus éditeur ----------
+  function initStatus() {
+    const box = document.getElementById('psp-status');
+    if (!box) return;
+    const L = (k) => box.getAttribute('data-l-' + k) || k;
+    const pct = (v) => (v === null ? '—' : v.toLocaleString(box.dataset.locale, { maximumFractionDigits: 2 }) + ' %');
+    const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+    const draw = (data) => {
+      box.replaceChildren();
+      for (const m of data.modules) {
+        const card = el('article', 'st-card');
+        const head = el('div', 'st-head');
+        head.append(el('h2', '', m.name), el('p', 'st-state st-' + m.state, L(m.state)));
+        const kpis = el('dl', 'st-kpis');
+        for (const [k, v] of [['24h', pct(m.availability24h)], ['90d', pct(m.availability90d)], ['avg', m.avgSeconds24h === null ? '—' : m.avgSeconds24h.toLocaleString(box.dataset.locale) + ' s']]) {
+          const d = el('div'); d.append(el('dt', '', L(k)), el('dd', '', v)); kpis.append(d);
+        }
+        const bars = el('div', 'st-bars');
+        bars.setAttribute('role', 'img');
+        const known = m.hours.filter((h) => h !== null);
+        bars.setAttribute('aria-label', L('hours') + ' : ' + (known.length ? known.map((h) => h + ' %').join(', ') : L('none')));
+        for (const h of m.hours) {
+          const b = el('span', 'st-bar ' + (h === null ? 'st-nil' : h >= 99 ? 'st-ok' : h >= 50 ? 'st-mid' : 'st-ko'));
+          b.style.height = (h === null ? 12 : Math.max(12, h)) + '%';
+          bars.append(b);
+        }
+        const cap = el('p', 'st-cap', L('hours'));
+        card.append(head, kpis, bars, cap);
+        box.append(card);
+      }
+      const t = new Date(data.generatedAt).toLocaleTimeString(box.dataset.locale, { hour: '2-digit', minute: '2-digit' });
+      box.append(el('p', 'st-upd', L('upd') + ' ' + t));
+    };
+    const load = () => fetch(box.dataset.src).then((r) => (r.ok ? r.json() : Promise.reject(r))).then(draw)
+      .catch(() => { box.replaceChildren(el('p', 'st-empty', L('error'))); });
+    load();
+    setInterval(load, 60000);
+  }
+
+  function initCalc() {
+    const T = $('cT'), V = $('cV'), S = $('cS'); if (!T) return;
+    const eur = (n) => new Intl.NumberFormat(lang, { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n);
+    const num = (n) => new Intl.NumberFormat(lang).format(n);
+    const update = () => {
+      const t = Number(T.value), v = Number(V.value), s = Number(S.value);
+      $('cTo').textContent = num(t); $('cVo').textContent = eur(v); $('cSo').textContent = num(s);
+      $('cR').textContent = eur(Math.round(t * v * 12 * s / 10000));
+    };
+    for (const el of [T, V, S]) el.addEventListener('input', update);
+    update();
+    calcUpdate = update;
+  }
+  let calcUpdate = () => undefined;
+
   // ---------- Démo ----------
   let recorded = null;
   let live = null; // null = inconnu, true = API joignable, false = exécution enregistrée
@@ -370,6 +425,8 @@
     initContact();
     initStore();
     initConnect();
+    initCalc();
+    initStatus();
     const hdH = () => document.documentElement.style.setProperty('--hd-h', `${document.querySelector('.hd').offsetHeight}px`);
     hdH(); addEventListener('resize', hdH);
     addEventListener('scroll', headerTone, { passive: true });

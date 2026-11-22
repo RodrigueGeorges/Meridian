@@ -35,6 +35,7 @@ export interface HttpRequest {
   encoding: 'json' | 'form';
   timeoutMs: number;
   errorCodePath: string;
+  acceptText?: boolean;
 }
 
 export type Fetcher = typeof fetch;
@@ -63,9 +64,11 @@ export async function httpCall(req: HttpRequest, fetcher: Fetcher = fetch): Prom
     clearTimeout(timer);
   }
   let json: Record<string, unknown> = {};
+  const text = await res.text().catch(() => '');
   try {
-    json = (await res.json()) as Record<string, unknown>;
+    json = JSON.parse(text) as Record<string, unknown>;
   } catch {
+    if (res.ok && req.acceptText) return { _text: text };
     if (res.ok) throw new NetError('Réponse illisible', 'BAD_BODY');
   }
   if (!res.ok) {
