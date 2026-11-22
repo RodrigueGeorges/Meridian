@@ -40,6 +40,10 @@
       if (dict[k] !== undefined) el.textContent = dict[k];
     }
     // Contenu riche : uniquement nos propres fichiers de traduction (balises <br> et <span class="hl">).
+    for (const el of document.querySelectorAll('[data-i18n-ph]')) {
+      const k = el.getAttribute('data-i18n-ph');
+      if (dict[k] !== undefined) el.setAttribute('placeholder', dict[k]);
+    }
     for (const el of document.querySelectorAll('[data-i18n-html]')) {
       const k = el.getAttribute('data-i18n-html');
       if (dict[k] !== undefined) el.innerHTML = dict[k];
@@ -51,6 +55,7 @@
     setMode();
     startFeed();
     renderLands();
+    filterStore();
   }
 
   // ---------- Navigation ----------
@@ -301,6 +306,31 @@
     });
   }
 
+
+  // ---------- Catalogue interactif ----------
+  let stCc = '';
+  function filterStore() {
+    const q = ($('stSearch')?.value ?? '').trim().toLowerCase();
+    let live = 0, soon = 0;
+    for (const li of document.querySelectorAll('.st-apps li')) {
+      const d = li.querySelector('[data-cc]'); if (!d) continue;
+      const any = d.dataset.cc === '*';
+      const okCc = any || !stCc || d.dataset.cc.split(' ').includes(stCc);
+      const okQ = any || !q || li.textContent.toLowerCase().includes(q);
+      li.hidden = !(okCc && okQ);
+      if (!li.hidden && !any) (li.querySelector('.st-badge.ok') ? live++ : soon++);
+    }
+    const c = $('stCount'); if (c) c.textContent = t('v7.count', { live: String(live), soon: String(soon) });
+  }
+  function initStore() {
+    for (const b of document.querySelectorAll('.st-filters [data-cc]')) b.addEventListener('click', () => {
+      stCc = b.dataset.cc;
+      document.querySelectorAll('.st-filters [data-cc]').forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', String(x === b)); });
+      filterStore();
+    });
+    $('stSearch')?.addEventListener('input', filterStore);
+  }
+
   // ---------- Démo ----------
   let recorded = null;
   let live = null; // null = inconnu, true = API joignable, false = exécution enregistrée
@@ -427,6 +457,7 @@
     $('run').addEventListener('click', () => void runDemo());
     initCode();
     initContact();
+    initStore();
     initWire();
     initStory();
     addEventListener('scroll', headerTone, { passive: true });

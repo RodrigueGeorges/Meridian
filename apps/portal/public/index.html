@@ -32,7 +32,7 @@
           <option value="es">ES</option><option value="it">IT</option><option value="nl">NL</option>
         </select>
       </label>
-      <a class="btn-s" href="console.html" data-i18n="nav.console">Se connecter</a>
+      <a class="btn-s" href="console.html" data-i18n="nav.console">Se connecter</a><button class="btn btn-sm" type="button" data-contact="software" data-i18n="v7.nav.cta">Nous contacter</button>
     </div>
   </div>
 </header>
@@ -58,18 +58,18 @@
     </div>
 
     <div class="store">
-      <div class="st-bar"><span class="st-logo"></span><b data-i18n="v5.store.title">Catalogue</b><span class="st-search" data-i18n="v5.store.search">Rechercher un PSP, un pays, un moyen de paiement</span></div>
-      <div class="st-filters"><span class="on">Tous</span><span>FR</span><span>DE</span><span>BE</span><span>CH</span><span>ES</span><span>IT</span></div>
+      <div class="st-bar"><span class="st-logo"></span><b data-i18n="v5.store.title">Catalogue</b><input class="st-search" id="stSearch" type="search" data-i18n-ph="v5.store.search" placeholder="Rechercher un PSP, un pays, un moyen de paiement" aria-label="Rechercher"></div>
+      <div class="st-filters" role="group" aria-label="Pays"><button class="on" data-cc="" data-i18n="v7.all">Tous</button><button data-cc="FR">FR</button><button data-cc="DE">DE</button><button data-cc="BE">BE</button><button data-cc="NL">NL</button><button data-cc="CH">CH</button><button data-cc="ES">ES</button><button data-cc="IT">IT</button></div>
       <ul class="st-apps">
-        <li><span class="ic" style="--h:275">S</span><div><b>Stripe Terminal</b><small data-i18n="v6.st.stripe">Cartes, Bancontact, CB · Europe</small></div><span class="st-badge ok" data-i18n="v6.st.live">Disponible</span></li>
-        <li><span class="ic" style="--h:150">A</span><div><b>Adyen</b><small data-i18n="v6.st.adyen">Terminal API · Europe</small></div><span class="st-badge" data-i18n="v6.st.soon">Prévu</span></li>
-        <li><span class="ic" style="--h:25">W</span><div><b>Worldline</b><small data-i18n="v6.st.wl">Acquisition · FR, BE, DE</small></div><span class="st-badge" data-i18n="v6.st.soon">Prévu</span></li>
-        <li><span class="ic" style="--h:240">N</span><div><b>Nexi</b><small data-i18n="v6.st.nexi">Acquisition · IT, DACH, Nordiques</small></div><span class="st-badge" data-i18n="v6.st.soon">Prévu</span></li>
-        <li><span class="ic" style="--h:200">V</span><div><b>Viva</b><small data-i18n="v6.st.viva">Cloud Terminal · Europe</small></div><span class="st-badge" data-i18n="v6.st.soon">Prévu</span></li>
-        <li><span class="ic" style="--h:330">M</span><div><b>Mollie</b><small data-i18n="v6.st.mollie">Terminaux · NL, BE, DE</small></div><span class="st-badge" data-i18n="v6.st.soon">Prévu</span></li>
-        <li class="slot"><span class="ic ic-c">+</span><div><b data-i18n="v6.st.you">Votre PSP</b><small data-i18n="v6.st.you1">Rejoignez le catalogue</small></div><button class="st-badge st-join" type="button" data-contact="psp" data-i18n="v6.st.join">Rejoindre</button></li>
+        <li><span class="ic" style="--h:275">S</span><div data-cc="FR BE NL DE ES IT AT CH"><b>Stripe Terminal</b><small data-i18n="v6.st.stripe">Cartes, Bancontact, CB · Europe</small></div><span class="st-badge ok" data-i18n="v6.st.live">Disponible</span></li>
+        <li><span class="ic" style="--h:150">A</span><div data-cc="FR BE NL DE ES IT AT CH"><b>Adyen</b><small data-i18n="v6.st.adyen">Terminal API · Europe</small></div><span class="st-badge" data-i18n="v6.st.soon">Prévu</span></li>
+        <li><span class="ic" style="--h:25">W</span><div data-cc="FR BE DE NL"><b>Worldline</b><small data-i18n="v6.st.wl">Acquisition · FR, BE, DE</small></div><span class="st-badge" data-i18n="v6.st.soon">Prévu</span></li>
+        <li><span class="ic" style="--h:240">N</span><div data-cc="IT DE AT CH"><b>Nexi</b><small data-i18n="v6.st.nexi">Acquisition · IT, DACH, Nordiques</small></div><span class="st-badge" data-i18n="v6.st.soon">Prévu</span></li>
+        <li><span class="ic" style="--h:200">V</span><div data-cc="FR BE NL DE ES IT"><b>Viva</b><small data-i18n="v6.st.viva">Cloud Terminal · Europe</small></div><span class="st-badge" data-i18n="v6.st.soon">Prévu</span></li>
+        <li><span class="ic" style="--h:330">M</span><div data-cc="NL BE DE"><b>Mollie</b><small data-i18n="v6.st.mollie">Terminaux · NL, BE, DE</small></div><span class="st-badge" data-i18n="v6.st.soon">Prévu</span></li>
+        <li class="slot"><span class="ic ic-c">+</span><div data-cc="*"><b data-i18n="v6.st.you">Votre PSP</b><small data-i18n="v6.st.you1">Rejoignez le catalogue</small></div><button class="st-badge st-join" type="button" data-contact="psp" data-i18n="v6.st.join">Rejoindre</button></li>
       </ul>
-      <div class="st-foot"><span data-i18n="v6.st.foot">1 PSP disponible · 5 prévus · Le catalogue s'agrandit</span></div>
+      <div class="st-foot"><span id="stCount"></span></div>
     </div>
   </div>
 
@@ -192,7 +192,7 @@ POST /v1/nexo
         <tr><th scope="row" data-i18n="guar.r5.a">L'annulation arrive trop tard</th><td data-i18n="guar.r5.b">Renvoie l'issue réelle et permet le remboursement</td><td><span class="pill mono" data-i18n="guar.r5.c">Issue réelle</span></td></tr>
       </tbody>
     </table>
-    <p class="panel-foot"><b data-i18n="guar.stat">0 double débit sur 200 séquences de pannes aléatoires, à chaque version.</b> <span data-i18n="stats.note">Résultats de la suite de tests ouverte, sur simulateurs PSP fidèles aux API. Validation en sandbox réelle en cours.</span> <a class="link" href="#demo" data-i18n="v5.res.demo">Lancer la démo de panne</a></p>
+    <p class="panel-foot"><b data-i18n="guar.stat">0 double débit sur 200 séquences de pannes aléatoires, à chaque version.</b> <span data-i18n="stats.note">Résultats de notre suite de tests automatisée, sur simulateurs PSP fidèles aux API. Validation en sandbox réelle en cours.</span> <a class="link" href="#demo" data-i18n="v5.res.demo">Lancer la démo de panne</a></p>
     </div>
   </div>
 
@@ -202,6 +202,38 @@ POST /v1/nexo
       <h2 data-i18n="v5.cov.h">8 pays au lancement, avec leurs moyens de paiement locaux.</h2>
     </div>
     <div class="cov"></div>
+  </div>
+
+  <div class="wrap section">
+    <div class="sec-head">
+      <p class="eyebrow" data-i18n="v7.cmp.k">Pourquoi Meridian</p>
+      <h2 data-i18n="v7.cmp.h">La seule approche pensée pour l'éditeur de caisse.</h2>
+    </div>
+    <div class="panel cmp-wrap">
+      <table class="cmp">
+        <thead><tr><th scope="col"></th><th scope="col" data-i18n="v7.cmp.c1">Intégrations directes</th><th scope="col" data-i18n="v7.cmp.c2">Terminal d'un seul PSP</th><th scope="col" data-i18n="v7.cmp.c3">Orchestrateur pour marchands</th><th scope="col" class="me">Meridian</th></tr></thead>
+        <tbody>
+          <tr><th scope="row" data-i18n="v7.cmp.r1">Le marchand garde son PSP</th><td class="y">✓</td><td class="n">✗</td><td class="y">✓</td><td class="me y">✓</td></tr>
+          <tr><th scope="row" data-i18n="v7.cmp.r2">Une seule intégration pour l'éditeur</th><td class="n">✗</td><td class="y">✓</td><td class="p" data-i18n="v7.cmp.r2c">Par marchand</td><td class="me y">✓</td></tr>
+          <tr><th scope="row" data-i18n="v7.cmp.r3">Caisses Concert, ZVT, nexo sans réécriture</th><td class="n">✗</td><td class="p" data-i18n="v7.cmp.var">Variable</td><td class="p" data-i18n="v7.cmp.r3c">Terminal compatible requis</td><td class="me y">✓</td></tr>
+          <tr><th scope="row" data-i18n="v7.cmp.r4">Contrat, fonds et commission restent au PSP</th><td class="y">✓</td><td class="y">✓</td><td class="p" data-i18n="v7.cmp.var">Variable</td><td class="me y">✓</td></tr>
+          <tr><th scope="row" data-i18n="v7.cmp.r5">Reprise garantie après coupure réseau</th><td class="p" data-i18n="v7.cmp.r5a">À développer</td><td class="p" data-i18n="v7.cmp.var">Variable</td><td class="p" data-i18n="v7.cmp.var">Variable</td><td class="me y">✓</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="wrap section">
+    <div class="sec-head">
+      <p class="eyebrow" data-i18n="v7.go.k">Démarrer</p>
+      <h2 data-i18n="v7.go.h">De la sandbox à la production, en trois étapes.</h2>
+    </div>
+    <ol class="go">
+      <li><span>1</span><h3 data-i18n="v7.go.1h">Échange de 30 minutes</h3><p data-i18n="v7.go.1p">Vos caisses, vos pays, les PSP de vos marchands. Nous vérifions ensemble la couverture du catalogue.</p></li>
+      <li><span>2</span><h3 data-i18n="v7.go.2h">Sandbox</h3><p data-i18n="v7.go.2p">Clés de test, SDK et simulateurs de panne. Votre équipe encaisse son premier paiement de test.</p></li>
+      <li><span>3</span><h3 data-i18n="v7.go.3h">Production</h3><p data-i18n="v7.go.3p">Activation des PSP par point de vente, suivi du premier paiement réel avec nos ingénieurs.</p></li>
+    </ol>
+    <div class="go-cta"><button class="btn" type="button" data-contact="software" data-i18n="v7.go.cta">Réserver l'échange</button></div>
   </div>
 
   <div class="wrap section">
