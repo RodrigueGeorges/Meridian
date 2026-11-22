@@ -50,6 +50,7 @@
     renderTicket(lastRun);
     setMode();
     startFeed();
+    renderLands();
   }
 
   // ---------- Navigation ----------
@@ -169,6 +170,103 @@
       catch { ev.target.textContent = '—'; }
       setTimeout(() => { ev.target.textContent = t('code.copy'); }, 1600);
     });
+  }
+
+
+  // ---------- Scène 1 : la ligne de paiement ----------
+  function initWire() {
+    const cv = $('wire'); if (!cv) return;
+    const ctx = cv.getContext('2d');
+    const state = $('wireState');
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let W = 0, H = 0, dpr = 1;
+    const size = () => { dpr = Math.min(2, devicePixelRatio || 1); W = cv.clientWidth; H = cv.clientHeight; cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); };
+    new ResizeObserver(size).observe(cv); size();
+    const SIG = '#6272FF', WAIT = '#FFC861', PAID = '#3FD99A';
+    const CYCLE = 7200; // ms : départ, coupure, attente, reprise, arrivée, pause
+    const draw = (now) => {
+      const y = H / 2, x0 = 8, x1 = W - 8, cutA = 0.46, cutB = 0.56;
+      const p = (now % CYCLE) / CYCLE;
+      // phases
+      const travel1 = Math.min(1, p / 0.22);                 // vers la coupure
+      const cut = p > 0.2 && p < 0.55;                        // réseau tombé
+      const travel2 = p < 0.55 ? 0 : Math.min(1, (p - 0.55) / 0.2); // reprise
+      const done = p >= 0.75;
+      ctx.clearRect(0, 0, W, H);
+      // ligne de base
+      ctx.lineWidth = 2; ctx.lineCap = 'round';
+      const seg = (a, b, col, alpha) => { ctx.globalAlpha = alpha; ctx.strokeStyle = col; ctx.beginPath(); ctx.moveTo(x0 + (x1 - x0) * a, y); ctx.lineTo(x0 + (x1 - x0) * b, y); ctx.stroke(); ctx.globalAlpha = 1; };
+      seg(0, cutA, 'rgba(255,255,255,.22)', 1); seg(cutB, 1, 'rgba(255,255,255,.22)', 1);
+      if (!cut) seg(cutA, cutB, 'rgba(255,255,255,.22)', 1);
+      else { // brèche qui clignote
+        const blink = 0.25 + 0.25 * Math.sin(now / 120);
+        ctx.setLineDash([4, 6]); seg(cutA, cutB, WAIT, blink); ctx.setLineDash([]);
+      }
+      // trace lumineuse parcourue
+      const head = done ? 1 : (p < 0.55 ? cutA * travel1 : cutA + (1 - cutA) * travel2);
+      const col = done ? PAID : cut ? WAIT : SIG;
+      seg(0, head, col, 0.95);
+      // tête
+      const hx = x0 + (x1 - x0) * head;
+      const glow = ctx.createRadialGradient(hx, y, 0, hx, y, 26);
+      glow.addColorStop(0, col); glow.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = glow; ctx.globalAlpha = 0.55; ctx.beginPath(); ctx.arc(hx, y, 26, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(hx, y, 4.5, 0, 7); ctx.fill();
+      // extrémités
+      for (const [x, c] of [[x0, SIG], [x1, done ? PAID : 'rgba(255,255,255,.5)']]) { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(x, y, 6, 0, 7); ctx.fill(); }
+      const label = done ? ['ok', t('x.done')] : cut ? ['wait', t('x.wait')] : ['', ''];
+      if (state.dataset.k !== label[1]) { state.dataset.k = label[1]; state.className = `w-state ${label[0]}`; state.textContent = label[1]; }
+    };
+    if (reduce) { draw(CYCLE * 0.9); return; }
+    let start = performance.now(), raf = 0, visible = true;
+    new IntersectionObserver(([e]) => { visible = e.isIntersecting; if (visible) loop(); }).observe(cv);
+    function loop() { cancelAnimationFrame(raf); if (!visible || document.hidden) return; draw(performance.now() - start); raf = requestAnimationFrame(loop); }
+    document.addEventListener('visibilitychange', loop);
+    loop();
+  }
+
+  // ---------- Scène 2 : histoire pilotée par le défilement ----------
+  function initStory() {
+    const story = $('story'); if (!story) return;
+    const stage = story.querySelector('.story-stage');
+    const count = $('ledgerCount');
+    let last = -1;
+    const update = () => {
+      const r = story.getBoundingClientRect();
+      const total = r.height - innerHeight;
+      const prog = Math.min(1, Math.max(0, -r.top / Math.max(1, total)));
+      const act = Math.min(3, Math.floor(prog * 4));
+      if (act !== last) { last = act; stage.dataset.act = String(act); count.textContent = act === 3 ? '1' : '0'; }
+    };
+    addEventListener('scroll', update, { passive: true }); addEventListener('resize', update); update();
+  }
+
+  // ---------- Scène 5 : pays ----------
+  function renderLands() {
+    const ul = $('lands'); if (!ul) return;
+    const names = new Intl.DisplayNames([lang], { type: 'region' });
+    const L = [['FR', 'CB'], ['BE', 'Bancontact'], ['NL', 'Wero'], ['DE', 'girocard'], ['ES', 'Bizum'], ['IT', 'PagoBancomat'], ['AT', ''], ['CH', 'TWINT']];
+    ul.replaceChildren(...L.map(([c, local]) => {
+      const li = document.createElement('li'); const b = document.createElement('b'); b.textContent = names.of(c) ?? c;
+      const sp = document.createElement('span'); sp.append('Visa, Mastercard');
+      if (local) { sp.append(', '); const em = document.createElement('em'); em.textContent = local; sp.append(em); }
+      li.append(b, sp); return li;
+    }));
+  }
+
+  // ---------- En-tête transparent sur les scènes de nuit ----------
+  function headerTone() {
+    const hd = document.querySelector('.hd');
+    const home = !document.querySelector('.view[data-view=home]').hidden;
+    let night = false;
+    if (home) {
+      const el = document.elementsFromPoint(innerWidth / 2, 36).find((e) => !e.closest('.hd'));
+      night = !!el?.closest('.night, .story');
+    }
+    if (!document.querySelector('.view[data-view=demo]').hidden) {
+      night = true;
+    }
+    hd.classList.toggle('on-night', night);
   }
 
   // ---------- Démo ----------
@@ -296,6 +394,11 @@
     $('lang').addEventListener('change', (ev) => { store.set('meridian.lang', ev.target.value); void load(ev.target.value); });
     $('run').addEventListener('click', () => void runDemo());
     initCode();
+    initWire();
+    initStory();
+    addEventListener('scroll', headerTone, { passive: true });
+    addEventListener('hashchange', () => setTimeout(headerTone, 50));
+    setTimeout(headerTone, 100);
     route();
     void load(pickLang());
   });

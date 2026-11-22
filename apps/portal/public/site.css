@@ -369,3 +369,141 @@ p{margin:0 0 16px}
 ::view-transition-old(root),::view-transition-new(root){animation-duration:.25s}
 @media(prefers-reduced-motion:reduce){.app-live::before,.edge::before,.app-tbl tr.new,.side-log li{animation:none}}
 @media(max-width:720px){.hd-end .btn-sm{display:none}}
+
+/* =====================================================================
+   v4 « Scènes » — soustraction radicale : scènes plein écran, une idée par écran,
+   la ligne de paiement comme image produit. Aucune ombre, aucun dégradé décoratif.
+   ===================================================================== */
+:root{
+  --night-x:#0B1238;--snow:#FFFFFF;--mist-x:#F2F3F7;--ink-x:#1C2033;--signal:#6272FF;--signal-ink:#3F4DE6;--paid:#3FD99A;--wait:#FFC861;
+  --sans:'Archivo','Instrument Sans',ui-sans-serif,system-ui,sans-serif;
+  --accent:var(--signal-ink);--accent-hover:#3341CC;--accent-ink:#3341CC;
+}
+body{font-family:var(--sans);font-stretch:100%}
+.display,.display-s,h2,.door-h,.statement{font-stretch:112%;font-weight:600;letter-spacing:-.025em}
+
+/* En-tête : transparent sur les scènes de nuit */
+.hd.on-night{background:transparent;backdrop-filter:none;border-bottom-color:transparent;color:#fff}
+.hd.on-night .nav a{color:rgba(255,255,255,.78)}.hd.on-night .nav a:hover,.hd.on-night .nav a[aria-current=page]{color:#fff}
+.hd.on-night .lang select,.hd.on-night .btn-s{background:transparent;color:#fff;border-color:rgba(255,255,255,.35)}
+.hd.on-night .lang select option{color:#000}
+.hd.on-night .logo path:first-of-type{stroke:var(--signal)}
+body:has(.view[data-view=home]:not([hidden])) .hd{position:fixed;left:0;right:0}
+
+/* Scènes */
+.scene{min-height:100svh;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;text-align:center;padding:clamp(104px,14vh,150px) var(--g) clamp(40px,6vh,72px);position:relative;overflow:hidden}
+.scene.night{background:var(--night-x);color:#fff}
+.scene.light{background:var(--snow);color:var(--ink-x)}
+.scene.mist{background:var(--mist-x);color:var(--ink-x)}
+.scene-txt{max-width:980px;display:flex;flex-direction:column;align-items:center}
+.mega{font-weight:620;font-stretch:118%;font-size:clamp(40px,6.4vw,100px);line-height:.98;letter-spacing:-.035em;margin:0;text-wrap:balance}
+.hero-x .scene-txt{max-width:1240px}
+.hero-x .mega{white-space:normal}
+@media(min-width:900px){.hero-x .mega{white-space:nowrap}}
+.big{font-weight:620;font-stretch:120%;font-size:clamp(36px,5.2vw,76px);line-height:1;letter-spacing:-.03em;margin:0;max-width:none;text-wrap:balance}
+.sub{font-size:clamp(17px,1.5vw,20px);line-height:1.5;margin:22px 0 0;max-width:46ch;opacity:.82;text-wrap:pretty}
+.pair{display:flex;flex-wrap:wrap;justify-content:center;gap:12px;margin-top:32px}
+.b1,.b2{display:inline-flex;align-items:center;justify-content:center;min-width:220px;min-height:48px;padding:0 28px;border-radius:6px;font:600 15px var(--sans);font-stretch:108%;text-decoration:none;letter-spacing:.01em;transition:background .2s,color .2s,border-color .2s}
+.night .b1{background:#fff;color:var(--night-x)}.night .b1:hover{background:#DDE1FF}
+.night .b2{color:#fff;box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.5)}.night .b2:hover{box-shadow:inset 0 0 0 1.5px #fff}
+.light .b1,.mist .b1{background:var(--signal-ink);color:#fff}.light .b1:hover,.mist .b1:hover{background:#3341CC}
+.light .b2,.mist .b2{color:var(--ink-x);box-shadow:inset 0 0 0 1.5px rgba(28,32,51,.35)}.light .b2:hover,.mist .b2:hover{box-shadow:inset 0 0 0 1.5px var(--ink-x)}
+@media(max-width:560px){.b1,.b2{min-width:0;width:100%}.pair{width:100%;max-width:360px}}
+
+/* Scène 1 : la ligne */
+.hero-x{justify-content:space-between}
+.wire{position:relative;margin:0;width:min(1240px,100%);height:clamp(180px,30vh,300px);margin-top:auto}
+.wire canvas{position:absolute;inset:0;width:100%;height:100%}
+.w-end{position:absolute;top:calc(50% + 26px);font-size:14px;font-stretch:112%;font-weight:500;color:rgba(255,255,255,.7)}
+.w-l{left:0}.w-r{right:0}
+.w-state{position:absolute;left:50%;top:calc(50% - 64px);transform:translateX(-50%);font-size:15px;font-weight:500;font-stretch:108%;white-space:nowrap;transition:color .3s,opacity .3s}
+.w-state.wait{color:var(--wait)}.w-state.ok{color:var(--paid)}
+
+/* Scène 2 : histoire au défilement */
+.story{height:420vh;position:relative;background:var(--night-x)}
+.story-stage{position:sticky;top:0;height:100svh;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:center;gap:clamp(32px,6vw,96px);padding:0 max(var(--g),calc((100vw - 1240px)/2));color:#fff;overflow:hidden}
+.acts{position:relative;min-height:340px}
+.act{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;opacity:0;transform:translateY(18px);transition:opacity .5s var(--ease),transform .5s var(--ease)}
+.story-stage[data-act="0"] .act[data-act="0"],.story-stage[data-act="1"] .act[data-act="1"],.story-stage[data-act="2"] .act[data-act="2"],.story-stage[data-act="3"] .act[data-act="3"]{opacity:1;transform:none}
+.clock{font-size:clamp(18px,1.6vw,22px);font-weight:500;font-feature-settings:'tnum';color:var(--signal);margin:0 0 14px;letter-spacing:.02em}
+.act h2{font-size:clamp(34px,4.4vw,64px);line-height:1.02;margin:0 0 18px;color:#fff;max-width:14ch}
+.act p{font-size:clamp(16px,1.4vw,19px);line-height:1.55;color:rgba(255,255,255,.78);max-width:40ch;margin:0}
+.story-stage[data-act="1"] .clock{color:var(--wait)}.story-stage[data-act="3"] .clock{color:var(--paid)}
+.ledger{border-radius:14px;background:rgba(255,255,255,.05);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);padding:26px 26px 22px}
+.l-head{display:flex;justify-content:space-between;font-weight:600;font-stretch:112%;font-size:18px;padding-bottom:16px;border-bottom:1px solid rgba(255,255,255,.12)}
+.l-rows{list-style:none;margin:0;padding:6px 0 0}
+.l-rows li{display:flex;flex-direction:column;gap:2px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.08);opacity:.14;transition:opacity .4s var(--ease)}
+.l-rows li b{font-weight:500;font-size:15px}
+.l-rows li i{font-style:normal;font-size:12.5px;color:rgba(255,255,255,.5);font-feature-settings:'tnum';letter-spacing:.02em}
+.l-rows li.warn b{color:var(--wait)}.l-rows li.ok b{color:var(--paid)}
+.story-stage[data-act="0"] .l-rows li[data-show="0"],
+.story-stage[data-act="1"] .l-rows li:is([data-show="0"],[data-show="1"]),
+.story-stage[data-act="2"] .l-rows li:is([data-show="0"],[data-show="1"]),
+.story-stage[data-act="3"] .l-rows li{opacity:1}
+.story-stage[data-act="2"] .l-rows li.warn{animation:breathe 1.4s ease-in-out infinite}
+@keyframes breathe{50%{opacity:.45}}
+.l-count{display:flex;justify-content:space-between;align-items:baseline;padding-top:18px}
+.l-count span{color:rgba(255,255,255,.6)}
+.l-count b{font-size:56px;font-weight:600;font-stretch:118%;line-height:1;transition:color .4s}
+.story-stage[data-act="3"] .l-count b{color:var(--paid)}
+.progress{position:absolute;left:max(var(--g),calc((100vw - 1240px)/2));bottom:40px;display:flex;gap:8px}
+.progress i{width:28px;height:3px;border-radius:2px;background:rgba(255,255,255,.2);transition:background .3s}
+.story-stage[data-act="0"] .progress i:nth-child(-n+1),.story-stage[data-act="1"] .progress i:nth-child(-n+2),.story-stage[data-act="2"] .progress i:nth-child(-n+3),.story-stage[data-act="3"] .progress i{background:#fff}
+@media(max-width:860px){.story{height:380vh}.story-stage{grid-template-columns:1fr;align-content:center;gap:24px;padding-top:80px}.acts{min-height:250px}.ledger{padding:18px}.l-rows li i{display:none}.l-count b{font-size:40px}}
+
+/* Scène 3 : code */
+.slab{margin:auto 0 0;width:min(1100px,100%);text-align:left;background:var(--night-x);color:#E6E8F5;border-radius:16px;padding:clamp(22px,3vw,40px);font:400 clamp(13px,1.15vw,16px)/1.9 var(--mono);overflow-x:auto;white-space:pre}
+.slab .c{color:#8C93B8}.slab .k{color:#B7A6FF}.slab .s{color:#8EE6B8}.slab .n{color:#FFD08A}
+
+/* Scène 4 : protocoles en très grand */
+.protos{list-style:none;margin:auto 0 0;padding:0;display:flex;flex-wrap:wrap;justify-content:center;gap:0 clamp(28px,6vw,96px)}
+.protos li{font-weight:700;font-stretch:125%;font-size:clamp(56px,11vw,180px);line-height:1;letter-spacing:-.04em;color:var(--ink-x)}
+.protos li:nth-child(2){color:var(--signal-ink)}
+
+/* Scène 5 : pays */
+.lands{list-style:none;margin:auto 0 0;padding:0;width:min(1200px,100%);display:grid;grid-template-columns:repeat(4,minmax(0,1fr));text-align:left}
+.lands li{padding:22px 0;border-top:1px solid rgba(255,255,255,.16);display:flex;flex-direction:column;gap:4px}
+.lands b{font-weight:600;font-stretch:118%;font-size:clamp(20px,2vw,28px);letter-spacing:-.02em}
+.lands span{color:rgba(255,255,255,.66);font-size:15px}
+.lands span em{font-style:normal;color:#fff}
+@media(max-width:760px){.lands{grid-template-columns:repeat(2,minmax(0,1fr));column-gap:20px}}
+
+/* Scène 6 : qui garde quoi */
+.split-money{margin:auto 0 0;width:min(980px,100%);display:grid;grid-template-columns:minmax(0,1fr) 2px minmax(0,1fr);gap:clamp(20px,4vw,56px);text-align:left;align-items:start}
+.split-money div:not(.m-line){display:flex;flex-direction:column;gap:10px}
+.split-money b{font-weight:600;font-stretch:118%;font-size:clamp(22px,2.2vw,30px);margin-bottom:6px}
+.split-money span{font-size:18px;color:#4A4F66;padding-bottom:10px;border-bottom:1px solid #E4E6EE}
+.m-line{background:var(--signal-ink);align-self:stretch}
+@media(max-width:700px){.split-money{grid-template-columns:1fr}.m-line{height:2px}}
+
+.finale{justify-content:center}
+.finale .scene-txt{margin:auto 0}
+
+/* Sur l'accueil, le pied de page reste sur fond nuit pour enchaîner avec la dernière scène */
+body:has(.view[data-view=home]:not([hidden])) .ft{margin-top:0;background:var(--night-x);color:rgba(255,255,255,.7);border-top-color:rgba(255,255,255,.12)}
+body:has(.view[data-view=home]:not([hidden])) .ft .ft-small{color:rgba(255,255,255,.5)}
+@media(prefers-reduced-motion:reduce){.act,.l-rows li{transition:none}.story-stage[data-act="2"] .l-rows li.warn{animation:none}}
+
+/* Démo : scène de nuit, le ticket est l'objet */
+.view[data-view=demo]{background:var(--night-x);color:#fff;min-height:100svh;padding-bottom:72px}
+body:has(.view[data-view=demo]:not([hidden])) .hd{position:fixed;left:0;right:0}
+body:has(.view[data-view=demo]:not([hidden])) .ft{margin-top:0;background:var(--night-x);color:rgba(255,255,255,.7);border-top-color:rgba(255,255,255,.12)}
+body:has(.view[data-view=demo]:not([hidden])) .ft .ft-small{color:rgba(255,255,255,.5)}
+.view[data-view=demo] .hero-sub{padding-top:clamp(120px,16vh,160px);text-align:center;display:flex;flex-direction:column;align-items:center}
+.view[data-view=demo] .eyebrow{display:none}
+.view[data-view=demo] .display-s{font-stretch:118%;font-size:clamp(36px,5vw,72px);color:#fff;max-width:20ch;text-wrap:balance}
+.view[data-view=demo] .lede{color:rgba(255,255,255,.78);margin-inline:auto;text-align:center}
+.view[data-view=demo] .scen legend{color:rgba(255,255,255,.6)}
+.view[data-view=demo] .scen label{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.14);color:#fff}
+.view[data-view=demo] .scen label:hover{border-color:rgba(255,255,255,.35)}
+.view[data-view=demo] .scen label:has(input:checked){border-color:#fff;box-shadow:0 0 0 1px #fff}
+.view[data-view=demo] .scen i{color:rgba(255,255,255,.6)}
+.view[data-view=demo] .scen input{background:transparent;border-color:rgba(255,255,255,.5)}
+.view[data-view=demo] .scen input:checked{border-color:#fff}.view[data-view=demo] .scen input:checked::before{background:#fff}
+.view[data-view=demo] .scen .btn{background:#fff;color:var(--night-x);border-color:#fff;border-radius:6px;font-stretch:108%;font-weight:600}
+.view[data-view=demo] .scen .btn:hover{background:#DDE1FF}
+.view[data-view=demo] .demo-note{color:rgba(255,255,255,.55)}
+.view[data-view=demo] .ticket{color:var(--ink-x)}
+.view[data-view=demo] .t-head span:first-child{color:var(--signal-ink)}
+.view[data-view=demo] .t-foot b.one{color:var(--ok)}
+.hd.on-night.scrolled{background:rgba(11,18,56,.72);backdrop-filter:saturate(1.4) blur(14px);border-bottom-color:rgba(255,255,255,.08)}
