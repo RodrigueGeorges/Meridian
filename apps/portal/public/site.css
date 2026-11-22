@@ -531,3 +531,18 @@ input.st-search:focus{border-color:var(--accent);background:#fff}
 .go li:not(:last-child)::after{content:'';position:absolute;top:46px;right:-20px;width:20px;height:2px;background:var(--blue-5)}
 .go-cta{margin-top:28px}
 @media(max-width:860px){.go{grid-template-columns:1fr}.go li::after{display:none}}
+
+/* v8 — inspiré du modèle Datacap */
+.nm-claim{margin:14px 0 0;font-weight:600;font-size:clamp(17px,1.6vw,20px);color:var(--accent-ink)}
+.models{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}
+.models article{background:var(--surface);border:1px solid var(--hair);border-radius:var(--r);padding:28px;display:flex;flex-direction:column}
+.models h3{font-size:14px;font-weight:500;color:var(--accent-ink);margin:0 0 10px}
+.md-big{font-size:clamp(22px,2vw,28px);font-weight:600;letter-spacing:-.02em;line-height:1.15;margin:0 0 18px}
+.models ul{list-style:none;margin:0 0 24px;padding:0;display:flex;flex-direction:column;gap:10px;flex:1}
+.models li{position:relative;padding-left:26px;color:var(--ink2)}
+.models li::before{content:'✓';position:absolute;left:0;color:var(--ok);font-weight:600}
+.models .btn{align-self:flex-start}
+.models .hl-card{background:var(--night);color:#fff;border-color:transparent}
+.models .hl-card h3{color:var(--blue-7)}.models .hl-card li{color:oklch(86% .02 275)}
+.models .hl-card .btn{background:#fff;color:var(--night);border-color:#fff}
+@media(max-width:900px){.models{grid-template-columns:1fr}}
