@@ -268,6 +268,39 @@
     hd.classList.toggle('on-dark', !!dark && dark.getBoundingClientRect().bottom > 72);
   }
 
+
+  // ---------- Contact ----------
+  function initContact() {
+    const dlg = $('contact'); if (!dlg) return;
+    const form = $('ctForm'), status = $('ctStatus'), send = $('ctSend');
+    document.addEventListener('click', (ev) => {
+      const b = ev.target.closest('[data-contact]'); if (!b) return;
+      const r = form.querySelector(`input[name=role][value=${b.dataset.contact}]`); if (r) r.checked = true;
+      status.textContent = ''; status.className = 'ct-status';
+      dlg.showModal(); form.querySelector('input[name=name]').focus();
+    });
+    send.addEventListener('click', async () => {
+      const fd = new FormData(form);
+      let bad = null;
+      for (const n of ['name', 'company', 'email']) {
+        const el = form.elements[n];
+        const ok = el.checkValidity() && el.value.trim().length >= 2;
+        el.setAttribute('aria-invalid', String(!ok)); if (!ok && !bad) bad = el;
+      }
+      if (bad) { status.className = 'ct-status err'; status.textContent = t('ct.invalid'); bad.focus(); return; }
+      send.disabled = true; status.className = 'ct-status'; status.textContent = t('ct.sending');
+      const body = Object.fromEntries(fd); body.lang = lang; if (!body.website) delete body.website;
+      for (const k of ['country', 'message']) if (!body[k]) delete body[k];
+      try {
+        const r = await fetch('/v1/contact', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+        if (r.status === 201) { status.className = 'ct-status ok'; status.textContent = t('ct.sent'); form.reset(); }
+        else if (r.status === 429) { status.className = 'ct-status err'; status.textContent = t('ct.rate'); }
+        else throw new Error(String(r.status));
+      } catch { status.className = 'ct-status err'; status.textContent = t('ct.fail'); }
+      finally { send.disabled = false; }
+    });
+  }
+
   // ---------- Démo ----------
   let recorded = null;
   let live = null; // null = inconnu, true = API joignable, false = exécution enregistrée
@@ -393,6 +426,7 @@
     $('lang').addEventListener('change', (ev) => { store.set('meridian.lang', ev.target.value); void load(ev.target.value); });
     $('run').addEventListener('click', () => void runDemo());
     initCode();
+    initContact();
     initWire();
     initStory();
     addEventListener('scroll', headerTone, { passive: true });

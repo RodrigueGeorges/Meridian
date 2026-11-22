@@ -464,3 +464,44 @@ p{margin:0 0 16px}
 .sec-head h2{max-width:26ch}
 .nm{gap:16px}
 .nm-core{box-shadow:0 0 0 6px var(--blue-3)}
+
+/* v6 — valeur d'abord */
+.wins{list-style:none;margin:32px 0 0;padding:24px 0 0;border-top:1px solid oklch(100% 0 0/.12);display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}
+.wins li{display:flex;flex-direction:column;gap:4px}
+.wins b{font-weight:600;font-size:16px;color:#fff}
+.wins span{font-size:14px;color:oklch(80% .03 275)}
+@media(max-width:560px){.wins{grid-template-columns:1fr}}
+button.btn{font-family:inherit}
+.ic{background:oklch(55% .17 var(--h,275))}
+.st-apps li{padding:13px 18px}
+.st-apps li .st-badge:not(.ok){color:var(--mute);border-color:var(--hair)}
+.st-join{cursor:pointer;background:var(--accent)!important;border-color:var(--accent)!important;color:#fff!important}
+.st-join:hover{background:var(--accent-hover)!important}
+.pilot{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(24px,4vw,56px);align-items:center;background:var(--surface);border:1px solid var(--hair);border-radius:24px;padding:clamp(28px,4vw,56px)}
+.pilot h2{margin:0 0 14px}.pilot p{color:var(--ink2);max-width:46ch;margin:0 0 24px}
+.pilot-slots{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.pilot-slots li{aspect-ratio:3/2;border-radius:14px;border:1.5px dashed var(--blue-5);background:var(--blue-1);display:grid;place-items:center;font-size:13px;color:var(--accent-ink);text-align:center;padding:8px}
+.pilot-slots li:first-child{background:var(--accent-soft);border-style:solid}
+@media(max-width:860px){.pilot{grid-template-columns:1fr}}
+
+/* Formulaire de contact */
+.contact{border:0;border-radius:20px;padding:0;width:min(520px,calc(100vw - 32px));max-height:calc(100svh - 32px);box-shadow:0 40px 100px -20px oklch(15% .05 275/.5);color:var(--ink)}
+.contact::backdrop{background:oklch(15% .05 275/.55);backdrop-filter:blur(4px)}
+.contact form{display:flex;flex-direction:column;gap:14px;padding:32px;position:relative}
+.contact h2{font-size:26px;margin:0;max-width:none}
+.ct-sub{margin:-6px 0 4px;color:var(--mute);font-size:15px}
+.contact label{display:flex;flex-direction:column;gap:6px;font-size:13.5px;font-weight:500;color:var(--ink2)}
+.contact input:not([type=radio]),.contact textarea{font:inherit;font-size:16px;color:var(--ink);background:var(--gray-1);border:1px solid var(--hair2);border-radius:10px;padding:11px 12px;width:100%}
+.contact input:focus,.contact textarea:focus{outline:2px solid var(--accent);outline-offset:0;border-color:transparent}
+.contact input[aria-invalid=true]{border-color:var(--no)}
+.ct-role{border:0;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px}
+.ct-role label{flex-direction:row;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--hair2);border-radius:999px;cursor:pointer;font-size:14px}
+.ct-role label:has(input:checked){border-color:var(--accent);background:var(--accent-soft);color:var(--accent-ink)}
+.ct-role input{accent-color:var(--accent);margin:0}
+.ct-x{position:absolute;top:14px;right:14px;width:40px;height:40px;border-radius:50%;border:0;background:var(--gray-3);font-size:22px;cursor:pointer;color:var(--ink2)}
+.hp{position:absolute;left:-9999px;width:1px;height:1px}
+.ct-status{margin:0;font-size:14px;min-height:1.4em}
+.ct-status.ok{color:var(--ok)}.ct-status.err{color:var(--no)}
+.ct-legal{margin:0;font-size:12.5px;color:var(--mute)}
+.ic.ic-c{background:transparent}
+.pilot p.eyebrow{color:var(--accent-ink);margin-bottom:14px}

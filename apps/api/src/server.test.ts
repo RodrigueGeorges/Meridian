@@ -74,6 +74,14 @@ for (const mode of ['memory', 'postgres'] as const) {
       expect((await fetch(`${base}/v1/demo/run`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"scenario":"rm -rf"}' })).status).toBe(400);
     });
 
+    it('contact : enregistre une demande valide, refuse un e-mail invalide et le champ piège', async () => {
+      const post = (b: unknown) => fetch(`${base}/v1/contact`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) });
+      const ok = { role: 'software', name: 'Ada Martin', company: 'Caisse Lab', email: 'ada@caisselab.example', country: 'FR', lang: 'fr' };
+      expect((await post(ok)).status).toBe(201);
+      expect((await post({ ...ok, email: 'pas-un-email' })).status).toBe(400);
+      expect((await post({ ...ok, website: 'http://spam' })).status).toBe(400);
+    });
+
     it('bascule vers le secours quand Stripe est injoignable', async () => {
       await sims.stopStripe();
       const m = new Meridian({ apiKey: KEY, posId: 'pos_demo_NL', baseUrl: base });

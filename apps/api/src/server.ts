@@ -226,6 +226,34 @@ export async function buildServer(o: ServerOptions) {
     });
   }
 
+  // ---------- Contact (site public) ----------
+  const contacts: unknown[] = [];
+  const contactHits = new Map<string, number[]>();
+  app.post('/v1/contact', async (req, reply) => {
+    const body = z.object({
+      role: z.enum(['software', 'psp', 'other']),
+      name: z.string().trim().min(2).max(120),
+      company: z.string().trim().min(2).max(160),
+      email: z.string().trim().email().max(200),
+      country: z.string().trim().max(60).optional(),
+      message: z.string().trim().max(2000).optional(),
+      lang: z.string().max(5).optional(),
+      website: z.string().max(0).optional(), // champ piège anti-robot : doit rester vide
+    }).parse(req.body ?? {});
+    const now = Date.now();
+    const recent = (contactHits.get(req.ip) ?? []).filter((t) => now - t < 3_600_000);
+    if (recent.length >= 5) return reply.code(429).send({ error: { code: 'rate_limited', message: 'Trop de demandes, réessayez plus tard' } });
+    contactHits.set(req.ip, [...recent, now]);
+    const id = `ct_${randomBytes(8).toString('hex')}`;
+    const rec = { id, role: body.role, name: body.name, company: body.company, email: body.email, country: body.country ?? null, message: body.message ?? null, lang: body.lang ?? null };
+    if (pool) {
+      await pool.query('INSERT INTO contact_requests (id, role, name, company, email, country, message, lang) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
+        [id, rec.role, rec.name, rec.company, rec.email, rec.country, rec.message, rec.lang]);
+    } else contacts.push(rec);
+    void deliver('org_demo', 'contact.created', rec);
+    return reply.code(201).send({ id });
+  });
+
   // ---------- Routes publiques ----------
   app.get('/health', async () => ({ ok: true, journal: (await engine.verify()).ok }));
   app.get('/v1/modules', async () => Object.values(BUILTIN_MODULES).map((m) => ({
