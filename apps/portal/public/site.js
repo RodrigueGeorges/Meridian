@@ -82,8 +82,7 @@
     ['CH', 'CHF', ['TWINT'], ['ZVT', 'nexo']],
   ];
   function renderCoverage() {
-    const box = $('coverage');
-    if (!box) return;
+    for (const box of document.querySelectorAll('.cov')) {
     const names = new Intl.DisplayNames([lang], { type: 'region' });
     box.replaceChildren(...COUNTRIES.map(([c, cur, local, proto]) => {
       const d = document.createElement('div');
@@ -97,6 +96,7 @@
       d.append(b, p);
       return d;
     }));
+    }
   }
 
 
@@ -263,10 +263,9 @@
       const el = document.elementsFromPoint(innerWidth / 2, 36).find((e) => !e.closest('.hd'));
       night = !!el?.closest('.night, .story');
     }
-    if (!document.querySelector('.view[data-view=demo]').hidden) {
-      night = true;
-    }
     hd.classList.toggle('on-night', night);
+    const dark = document.querySelector('.view[data-view=home]:not([hidden]) .hero-dark');
+    hd.classList.toggle('on-dark', !!dark && dark.getBoundingClientRect().bottom > 72);
   }
 
   // ---------- Démo ----------
