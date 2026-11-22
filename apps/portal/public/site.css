@@ -593,3 +593,6 @@ input.st-search:focus{border-color:var(--accent);background:#fff}
 .try::before{background:var(--accent);box-shadow:0 0 0 4px var(--blue-4)}
 .hero-dark{margin-top:calc(-1 * var(--hd-h,72px));padding-top:var(--hd-h,72px)}
 @media(max-width:720px){.wins{display:none}.hero2{padding-top:32px}}
+.hd{transition:background-color .2s,border-color .2s}
+.hd.on-dark.scrolled{background:color-mix(in oklch,var(--night) 86%,transparent);backdrop-filter:saturate(1.4) blur(14px);-webkit-backdrop-filter:saturate(1.4) blur(14px);border-bottom-color:oklch(100% 0 0/.08)}
+.st-filters button{min-height:36px;padding:6px 12px}@media(pointer:coarse){.st-filters button{min-height:40px}}
