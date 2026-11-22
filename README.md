@@ -98,7 +98,7 @@ Un module nouveau porte `"maturity": "preview"` tant qu'il n'a pas passé les sc
 
 | Mode | Chemin | État |
 | --- | --- | --- |
-| PSP dans le cloud | Caisse → API Meridian → API du PSP | Stripe disponible ; Adyen en aperçu |
+| PSP dans le cloud | Caisse → API Meridian → API du PSP | Stripe disponible ; Adyen, Mollie, Square, SumUp en aperçu (testés contre imitations de leur API) |
 | TPE du magasin, en local | Caisse installée → agent (127.0.0.1:8787) → TPE | Pilotes testés sur TPE simulés ; validation sur matériel à faire |
 | TPE du magasin, caisse en ligne | Caisse SaaS → API Meridian → relais → agent → TPE | Idem |
 | Caisse existante | Trame Concert, ZVT ou nexo → passerelle Meridian → PSP | Démonstration |

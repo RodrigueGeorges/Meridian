@@ -17,6 +17,7 @@ export interface StatusResult {
   data: Record<string, unknown>;
 }
 
+const fixed = (amount: number, currency: string) => major(amount, currency).toFixed((CURRENCIES as Record<string, number>)[currency] ?? 2);
 const major = (amount: number, currency: string) => {
   const d = (CURRENCIES as Record<string, number>)[currency] ?? 2;
   return Math.round(amount) / 10 ** d;
@@ -51,6 +52,7 @@ export class ModuleRuntime {
         ...tx,
         currencyLower: tx.currency.toLowerCase(),
         amountMajor: major(tx.amount, tx.currency),
+        amountString: fixed(tx.amount, tx.currency),
         // Identifiant court et stable par référence (10 caractères alphanumériques), pour les PSP qui le limitent.
         serviceId: BigInt('0x' + createHash('sha256').update(tx.reference).digest('hex').slice(0, 16)).toString(36).slice(0, 10).padStart(10, '0'),
       },
@@ -63,7 +65,8 @@ export class ModuleRuntime {
   private async call(spec: CallDef, ctx: Record<string, unknown>, idemKey?: string): Promise<Record<string, unknown>> {
     const headers: Record<string, string> = { accept: 'application/json' };
     if (this.def.auth) headers[this.def.auth.header] = String(render(this.def.auth.value, ctx));
-    if (idemKey && this.def.idempotency) headers[this.def.idempotency.header] = idemKey;
+    for (const [k, v] of Object.entries(this.def.headers ?? {})) headers[k] = String(render(v, ctx));
+    if (idemKey && this.def.idempotency?.header) headers[this.def.idempotency.header] = idemKey;
     const base = this.opts.baseUrlOverride ?? this.def.baseUrl;
     return httpCall(
       {
@@ -96,7 +99,14 @@ export class ModuleRuntime {
 
   async lookup(tx: TxContext): Promise<Record<string, unknown> | null> {
     if (!this.def.lookup) return null;
-    const json = await this.call(this.def.lookup, this.ctx(tx, {}));
+    let json: Record<string, unknown>;
+    try {
+      json = await this.call(this.def.lookup, this.ctx(tx, {}));
+    } catch (e) {
+      // 404 = le PSP ne connaît pas ce paiement : il n'a pas été reçu.
+      if (e instanceof RemoteError && e.status === 404) return null;
+      throw e;
+    }
     if (this.def.lookup.notFound?.length && matches(this.def.lookup.notFound, json)) return null;
     const out: Record<string, unknown> = {};
     for (const [k, p] of Object.entries(this.def.lookup.pick)) out[k] = get(json, p);
@@ -131,7 +141,7 @@ export class ModuleRuntime {
   }
 
   async refund(tx: TxContext, vars: Record<string, unknown>, amount: number, n: number, receipt?: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return this.call(this.def.refund, this.ctx(tx, vars, { refund: { amount, number: n, amountMajor: major(amount, tx.currency) }, receipt: receipt ?? {} }), `${tx.reference}:refund:${n}`);
+    return this.call(this.def.refund, this.ctx(tx, vars, { refund: { amount, number: n, amountMajor: major(amount, tx.currency), amountString: fixed(amount, tx.currency) }, receipt: receipt ?? {} }), `${tx.reference}:refund:${n}`);
   }
 
   /** Variables que la caisse doit recevoir (secret client d'un paiement encaissé sur l'appareil). */

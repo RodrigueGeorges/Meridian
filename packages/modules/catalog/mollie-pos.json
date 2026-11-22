@@ -1,0 +1,58 @@
+{
+  "id": "mollie-pos",
+  "name": "Mollie Point-of-sale (terminaux Mollie)",
+  "version": "0.1.0",
+  "maturity": "preview",
+  "kind": "acceptance_and_acquiring",
+  "baseUrl": "https://api.mollie.com",
+  "config": [
+    { "key": "apiKey", "type": "string", "secret": true, "label": "Clé API Mollie (live_… ou test_…)" },
+    { "key": "terminalId", "type": "string", "label": "Identifiant du terminal (term_…)" }
+  ],
+  "auth": { "header": "Authorization", "value": "Bearer {{config.apiKey}}" },
+  "encoding": "json",
+  "errorCodePath": "title",
+  "idempotency": { "header": "Idempotency-Key" },
+  "pay": {
+    "steps": [
+      {
+        "id": "create_payment",
+        "method": "POST",
+        "path": "/v2/payments",
+        "body": {
+          "amount": { "currency": "{{tx.currency}}", "value": "{{tx.amountString}}" },
+          "description": "Meridian {{tx.reference}}",
+          "method": "pointofsale",
+          "terminalId": "{{config.terminalId}}",
+          "metadata": { "meridian_ref": "{{tx.reference}}" }
+        },
+        "save": { "paymentId": "id" }
+      }
+    ]
+  },
+  "status": {
+    "sources": { "p": { "method": "GET", "path": "/v2/payments/{{vars.paymentId}}" } },
+    "rules": [
+      { "when": [{ "path": "p.status", "equals": "paid" }], "state": "authorized" },
+      { "when": [{ "path": "p.status", "equals": "canceled" }], "state": "cancelled" },
+      { "when": [{ "path": "p.status", "equals": "failed" }], "state": "declined", "detailPath": "p.details.failureReason" },
+      { "when": [{ "path": "p.status", "equals": "expired" }], "state": "declined", "detailPath": "p.status" }
+    ]
+  },
+  "cancel": { "method": "DELETE", "path": "/v2/payments/{{vars.paymentId}}", "busyCodes": ["Unprocessable Entity"] },
+  "refund": {
+    "method": "POST",
+    "path": "/v2/payments/{{vars.paymentId}}/refunds",
+    "body": { "amount": { "currency": "{{tx.currency}}", "value": "{{refund.amountString}}" } }
+  },
+  "receipt": { "brand": "p.cardDetails.cardLabel", "maskedPan": "p.cardDetails.cardNumber" },
+  "capabilities": {
+    "countries": ["NL", "BE", "DE", "FR"],
+    "currencies": ["EUR"],
+    "paymentMethods": { "*": ["visa", "mastercard", "maestro"], "BE": ["bancontact"] },
+    "partialRefund": true,
+    "cancelDuringAuth": false,
+    "languages": ["fr", "en", "de", "nl"],
+    "compatProtocols": []
+  }
+}

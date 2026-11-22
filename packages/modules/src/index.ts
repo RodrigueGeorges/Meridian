@@ -3,6 +3,9 @@ import secours from '../catalog/psp-secours.json' with { type: 'json' };
 import adyen from '../catalog/adyen-terminal.json' with { type: 'json' };
 import tapToPay from '../catalog/stripe-tap-to-pay.json' with { type: 'json' };
 import edgeTerminal from '../catalog/edge-terminal.json' with { type: 'json' };
+import mollie from '../catalog/mollie-pos.json' with { type: 'json' };
+import square from '../catalog/square-terminal.json' with { type: 'json' };
+import sumup from '../catalog/sumup-solo.json' with { type: 'json' };
 import { parseModule, type ModuleDef } from './schema.ts';
 
 export * from './schema.ts';
@@ -12,7 +15,7 @@ export * from './runtime.ts';
 
 /** Catalogue des modules livrés avec le dépôt (validés au chargement). */
 export const BUILTIN_MODULES: Record<string, ModuleDef> = Object.fromEntries(
-  [stripe, secours, adyen, tapToPay, edgeTerminal].map((m) => {
+  [stripe, secours, adyen, tapToPay, edgeTerminal, mollie, square, sumup].map((m) => {
     const def = parseModule(m);
     return [def.id, def];
   }),

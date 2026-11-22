@@ -1,0 +1,61 @@
+{
+  "id": "sumup-solo",
+  "name": "SumUp Solo (Cloud API)",
+  "version": "0.1.0",
+  "maturity": "preview",
+  "kind": "acceptance_and_acquiring",
+  "baseUrl": "https://api.sumup.com",
+  "config": [
+    { "key": "apiKey", "type": "string", "secret": true, "label": "Clé API SumUp" },
+    { "key": "merchantCode", "type": "string", "label": "Code marchand SumUp" },
+    { "key": "readerId", "type": "string", "label": "Identifiant du lecteur Solo" },
+    { "key": "affiliateKey", "type": "string", "secret": true, "label": "Clé d'affilié (Affiliate Key)" },
+    { "key": "appId", "type": "string", "label": "Identifiant d'application (app_id)" }
+  ],
+  "auth": { "header": "Authorization", "value": "Bearer {{config.apiKey}}" },
+  "encoding": "json",
+  "errorCodePath": "error_code",
+  "lookup": {
+    "method": "GET",
+    "path": "/v2.1/merchants/{{config.merchantCode}}/transactions?foreign_transaction_id={{tx.reference}}",
+    "pick": { "transactionId": "id" }
+  },
+  "pay": {
+    "steps": [
+      {
+        "id": "reader_checkout",
+        "method": "POST",
+        "path": "/v0.1/merchants/{{config.merchantCode}}/readers/{{config.readerId}}/checkout",
+        "body": {
+          "total_amount": { "currency": "{{tx.currency}}", "minor_unit": 2, "value": "{{tx.amount}}" },
+          "description": "Meridian {{tx.reference}}",
+          "affiliate": { "app_id": "{{config.appId}}", "key": "{{config.affiliateKey}}", "foreign_transaction_id": "{{tx.reference}}" }
+        }
+      }
+    ]
+  },
+  "status": {
+    "sources": { "t": { "method": "GET", "path": "/v2.1/merchants/{{config.merchantCode}}/transactions?foreign_transaction_id={{tx.reference}}" } },
+    "rules": [
+      { "when": [{ "path": "t.status", "equals": "SUCCESSFUL" }], "state": "authorized" },
+      { "when": [{ "path": "t.status", "equals": "CANCELLED" }], "state": "cancelled" },
+      { "when": [{ "path": "t.status", "equals": "FAILED" }], "state": "declined", "detailPath": "t.status" }
+    ]
+  },
+  "cancel": { "method": "POST", "path": "/v0.1/merchants/{{config.merchantCode}}/readers/{{config.readerId}}/terminate", "busyCodes": [] },
+  "refund": {
+    "method": "POST",
+    "path": "/v0.1/me/refund/{{receipt.transactionId}}",
+    "body": { "amount": "{{refund.amountMajor}}" }
+  },
+  "receipt": { "transactionId": "t.id", "brand": "t.card.type", "last4": "t.card.last_4_digits" },
+  "capabilities": {
+    "countries": ["FR", "BE", "NL", "DE", "ES", "IT", "AT", "CH"],
+    "currencies": ["EUR", "CHF"],
+    "paymentMethods": { "*": ["visa", "mastercard", "maestro", "amex"] },
+    "partialRefund": true,
+    "cancelDuringAuth": false,
+    "languages": ["fr", "en", "de", "es", "it", "nl"],
+    "compatProtocols": []
+  }
+}

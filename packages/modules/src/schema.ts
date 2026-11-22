@@ -32,7 +32,11 @@ export const ModuleSchema = z
     auth: z.object({ header: z.string(), value: z.string() }).optional(),
     encoding: z.enum(['json', 'form']).default('json'),
     errorCodePath: z.string().default('error.code'),
-    idempotency: z.object({ header: z.string() }).optional(),
+    /** Clé d'idempotence : dans un en-tête, ou déjà portée par le corps des requêtes (inBody, ex. idempotency_key). */
+    idempotency: z.object({ header: z.string().optional(), inBody: z.boolean().optional() })
+      .refine((i) => Boolean(i.header || i.inBody), { message: 'idempotency : header ou inBody' }).optional(),
+    /** En-têtes fixes envoyés à chaque appel (version d'API, identifiants de partenaire). Gabarits autorisés. */
+    headers: z.record(z.string(), z.string()).optional(),
     /** Recherche avant tout renvoi d'une étape incertaine, pour les PSP sans clé d'idempotence. */
     lookup: Call.extend({ pick: z.record(z.string(), z.string()), notFound: z.array(Condition).optional() }).optional(),
     /** Variables remises à la caisse (ex. secret client pour un paiement encaissé sur l'appareil). */

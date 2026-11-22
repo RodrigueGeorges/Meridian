@@ -1,0 +1,62 @@
+{
+  "id": "square-terminal",
+  "name": "Square Terminal API",
+  "version": "0.1.0",
+  "maturity": "preview",
+  "kind": "acceptance_and_acquiring",
+  "baseUrl": "https://connect.squareup.com",
+  "config": [
+    { "key": "accessToken", "type": "string", "secret": true, "label": "Jeton d'accès Square (OAuth du marchand)" },
+    { "key": "deviceId", "type": "string", "label": "Identifiant du Square Terminal (device_id)" }
+  ],
+  "auth": { "header": "Authorization", "value": "Bearer {{config.accessToken}}" },
+  "headers": { "Square-Version": "2025-10-16" },
+  "encoding": "json",
+  "errorCodePath": "errors.0.code",
+  "idempotency": { "inBody": true },
+  "pay": {
+    "steps": [
+      {
+        "id": "create_checkout",
+        "method": "POST",
+        "path": "/v2/terminals/checkouts",
+        "body": {
+          "idempotency_key": "{{tx.reference}}",
+          "checkout": {
+            "amount_money": { "amount": "{{tx.amount}}", "currency": "{{tx.currency}}" },
+            "reference_id": "{{tx.reference}}",
+            "device_options": { "device_id": "{{config.deviceId}}" }
+          }
+        },
+        "save": { "checkoutId": "checkout.id" }
+      }
+    ]
+  },
+  "status": {
+    "sources": { "c": { "method": "GET", "path": "/v2/terminals/checkouts/{{vars.checkoutId}}" } },
+    "rules": [
+      { "when": [{ "path": "c.checkout.status", "equals": "COMPLETED" }], "state": "authorized" },
+      { "when": [{ "path": "c.checkout.status", "equals": "CANCELED" }], "state": "cancelled", "detailPath": "c.checkout.cancel_reason" }
+    ]
+  },
+  "cancel": { "method": "POST", "path": "/v2/terminals/checkouts/{{vars.checkoutId}}/cancel", "busyCodes": [] },
+  "refund": {
+    "method": "POST",
+    "path": "/v2/refunds",
+    "body": {
+      "idempotency_key": "{{tx.reference}}-refund-{{refund.number}}",
+      "payment_id": "{{receipt.paymentId}}",
+      "amount_money": { "amount": "{{refund.amount}}", "currency": "{{tx.currency}}" }
+    }
+  },
+  "receipt": { "paymentId": "c.checkout.payment_ids.0" },
+  "capabilities": {
+    "countries": ["FR", "ES"],
+    "currencies": ["EUR"],
+    "paymentMethods": { "*": ["visa", "mastercard", "amex"] },
+    "partialRefund": true,
+    "cancelDuringAuth": true,
+    "languages": ["fr", "en", "es"],
+    "compatProtocols": []
+  }
+}
