@@ -43,25 +43,28 @@
 <section class="view" data-view="home">
   <div class="hero-dark"><div class="wrap hero2">
     <div class="h2-txt">
-      <p class="eyebrow-pill"><span class="dot"></span><span data-i18n="v6.pill">Le store des paiements en magasin</span></p>
-      <h1 class="display" data-i18n="v6.h1">Tous les PSP. Dans toutes les caisses.</h1>
-      <p class="lede" data-i18n="v6.lede">Éditeurs : signez chaque marchand, quel que soit son PSP. PSP : entrez dans des milliers de caisses sans un seul projet d'intégration. Meridian fait le lien, et garantit chaque paiement.</p>
+      <p class="eyebrow-pill"><span class="dot"></span><span data-i18n="v9.pill">Le store des PSP pour les caisses et les bornes</span></p>
+      <h1 class="display" data-i18n="v9.h1">Le connecteur universel entre les caisses et les PSP.</h1>
+      <p class="lede" data-i18n="v9.lede">Les éditeurs de caisse connectent n'importe quel PSP du catalogue en quelques clics, sans développement. Les PSP deviennent disponibles dans toutes les caisses connectées.</p>
       <div class="ctas">
         <button class="btn" type="button" data-contact="software" data-i18n="v6.cta.sw">Je suis éditeur</button>
         <button class="btn ghost" type="button" data-contact="psp" data-i18n="v6.cta.psp">Je suis PSP</button>
       </div>
       <ul class="wins">
-        <li><b data-i18n="v6.w1.h">Plus de marchands signés</b><span data-i18n="v6.w1.p">Le PSP n'est plus un motif de refus.</span></li>
+        <li><b data-i18n="v9.w1.h">Quelques clics</b><span data-i18n="v9.w1.p">Pour connecter un PSP, sans ligne de code.</span></li>
         <li><b data-i18n="v6.w2.h">Zéro double débit</b><span data-i18n="v6.w2.p">Même quand le réseau coupe.</span></li>
         <li><b data-i18n="v8.w3.h">Hors périmètre carte</b><span data-i18n="v8.w3.p">Aucune donnée de carte dans votre logiciel.</span></li>
       </ul>
     </div>
 
-    <div class="store">
-      <div class="st-bar"><span class="st-logo"></span><b data-i18n="v5.store.title">Catalogue</b><input class="st-search" id="stSearch" type="search" data-i18n-ph="v5.store.search" placeholder="Rechercher un PSP, un pays, un moyen de paiement" aria-label="Rechercher"></div>
-      <div class="st-filters" role="group" aria-label="Pays"><button class="on" data-cc="" data-i18n="v7.all">Tous</button><button data-cc="FR">FR</button><button data-cc="DE">DE</button><button data-cc="BE">BE</button><button data-cc="NL">NL</button><button data-cc="CH">CH</button><button data-cc="ES">ES</button><button data-cc="IT">IT</button></div>
+    <div class="store" id="hstore" data-pane="catalog">
+      <p class="try" data-i18n="v9.try">Essayez : connectez un PSP à une caisse</p>
+      <div class="st-bar"><span class="st-logo"></span><b data-i18n="v5.store.title">Catalogue</b><span class="st-pos" data-i18n="v9.pos">Paris · Caisse 2</span><span class="st-timer" id="stTimer" aria-live="off"></span></div>
+
+      <section class="pane pane-catalog">
+<div class="st-filters" role="group" aria-label="Pays"><button class="on" data-cc="" data-i18n="v7.all">Tous</button><button data-cc="FR">FR</button><button data-cc="DE">DE</button><button data-cc="BE">BE</button><button data-cc="NL">NL</button><button data-cc="CH">CH</button><button data-cc="ES">ES</button><button data-cc="IT">IT</button></div>
       <ul class="st-apps">
-        <li><span class="ic" style="--h:275">S</span><div data-cc="FR BE NL DE ES IT AT CH"><b>Stripe Terminal</b><small data-i18n="v6.st.stripe">Cartes, Bancontact, CB · Europe</small></div><span class="st-badge ok" data-i18n="v6.st.live">Disponible</span></li>
+        <li><span class="ic" style="--h:275">S</span><div data-cc="FR BE NL DE ES IT AT CH"><b>Stripe Terminal</b><small data-i18n="v6.st.stripe">Cartes, Bancontact, CB · Europe</small></div><button class="st-badge st-connect" type="button" data-pane-go="config" data-i18n="v9.connect1">Connecter</button></li>
         <li><span class="ic" style="--h:150">A</span><div data-cc="FR BE NL DE ES IT AT CH"><b>Adyen</b><small data-i18n="v6.st.adyen">Terminal API · Europe</small></div><span class="st-badge" data-i18n="v6.st.soon">Prévu</span></li>
         <li><span class="ic" style="--h:25">W</span><div data-cc="FR BE DE NL"><b>Worldline</b><small data-i18n="v6.st.wl">Acquisition · FR, BE, DE</small></div><span class="st-badge" data-i18n="v6.st.soon">Prévu</span></li>
         <li><span class="ic" style="--h:240">N</span><div data-cc="IT DE AT CH"><b>Nexi</b><small data-i18n="v6.st.nexi">Acquisition · IT, DACH, Nordiques</small></div><span class="st-badge" data-i18n="v6.st.soon">Prévu</span></li>
@@ -70,9 +73,28 @@
         <li class="slot"><span class="ic ic-c">+</span><div data-cc="*"><b data-i18n="v6.st.you">Votre PSP</b><small data-i18n="v6.st.you1">Rejoignez le catalogue</small></div><button class="st-badge st-join" type="button" data-contact="psp" data-i18n="v6.st.join">Rejoindre</button></li>
       </ul>
       <div class="st-foot"><span id="stCount"></span></div>
+      </section>
+
+      <section class="pane pane-config" aria-label="Configuration">
+        <button class="back" type="button" data-pane-go="catalog" data-i18n="v9.back">Catalogue</button>
+        <div class="cfg-head"><span class="ic" style="--h:275">S</span><div><b>Stripe Terminal</b><small data-i18n="v6.st.stripe">Cartes, Bancontact, CB · Europe</small></div></div>
+        <label><span data-i18n="v9.f1">Point de vente</span><input value="Paris · Caisse 2" readonly></label>
+        <label><span data-i18n="v9.f2">Clé API du PSP</span><input value="sk_test_••••••••••••4f2a" readonly></label>
+        <label><span data-i18n="v9.f3">Terminal</span><input value="Lecteur S700 · tmr_FR" readonly></label>
+        <p class="cfg-note" data-i18n="v9.cfgnote">Démo : valeurs de test pré-remplies. Vos clés restent chiffrées côté Meridian.</p>
+        <button class="btn st-go" type="button" id="stConnect" data-i18n="v9.connect">Connecter et tester</button>
+      </section>
+
+      <section class="pane pane-done" aria-live="polite">
+        <div class="done-check" aria-hidden="true"></div>
+        <p class="done-h" data-i18n="v9.done.h">Stripe Terminal est connecté.</p>
+        <p class="done-time" id="stDoneTime"></p>
+        <ul class="done-steps" id="stSteps"></ul>
+        <div class="done-pay"><span data-i18n="v9.done.pay">Paiement test</span><b id="stPay">—</b></div>
+        <div class="done-actions"><button class="btn" type="button" data-contact="software" data-i18n="v9.done.cta">Connecter mes caisses</button><button class="btn ghost" type="button" data-pane-go="catalog" id="stAgain" data-i18n="v9.again">Recommencer</button></div>
+      </section>
     </div>
   </div>
-
   </div>
 
   <div class="wrap trust">
@@ -81,6 +103,10 @@
       <li><b data-i18n="trust.2.h">Aucune donnée de carte</b><span data-i18n="trust.2.p">Le terminal et le PSP gardent la carte ; Meridian ne voit que les 4 derniers chiffres.</span></li>
       <li><b data-i18n="trust.3.h">Journal signé et vérifiable</b><span data-i18n="trust.3.p">Chaque étape est chaînée (SHA-256) et signée avant d'être envoyée.</span></li>
     </ul>
+  </div>
+
+  <div class="wrap proof">
+    <p><b data-i18n="v9.proof.h">Et quand le réseau coupe ?</b> <span data-i18n="v9.proof.p">Meridian garde le paiement en cours et retrouve son issue réelle chez le PSP : zéro double débit sur 200 séquences de pannes testées à chaque version.</span> <a class="link" href="#demo" data-i18n="v9.proof.cta">Voir la démo de panne</a></p>
   </div>
 
   <div class="wrap market">
@@ -139,61 +165,6 @@
       </ul>
       <a class="link" href="#psp" data-i18n="v5.psp.more">Publier un module</a>
     </article>
-  </div>
-
-  <div class="wrap section split">
-    <div>
-      <p class="eyebrow" data-i18n="code.eyebrow">Intégration</p>
-      <h2 data-i18n="code.h">Cinq appels. Le même code pour tous les PSP.</h2>
-      <p data-i18n="code.p">Payer, consulter l'état, annuler, rembourser, obtenir le reçu. Le SDK gère les rejeux, les délais et les réponses perdues. Changer de PSP, c'est changer un réglage, pas votre code.</p>
-      <a class="link" href="https://github.com/RodrigueGeorges/Meridian#readme" data-i18n="code.more">Référence de l'API →</a>
-    </div>
-    <div class="codebox">
-      <div class="code-tabs" role="tablist" aria-label="Exemples">
-        <button role="tab" aria-selected="true" data-code="sdk">SDK</button>
-        <button role="tab" aria-selected="false" data-code="rest">REST</button>
-        <button role="tab" aria-selected="false" data-code="nexo">nexo</button>
-        <button class="copy" type="button" id="copyCode" data-i18n="code.copy">Copier</button>
-      </div>
-<pre class="code mono" id="code-sdk"><code><span class="c">// npm i @meridian/sdk</span>
-<span class="k">const</span> m = <span class="k">new</span> Meridian({ apiKey, posId: <span class="s">'pos_paris_01'</span> });
-
-<span class="k">await</span> m.pay({ reference: <span class="s">'T-1042'</span>, amount: <span class="n">2450</span>, currency: <span class="s">'EUR'</span> });
-<span class="k">const</span> p = <span class="k">await</span> m.waitForFinal(<span class="s">'T-1042'</span>);
-<span class="c">// p.state → 'authorized', quel que soit le PSP activé</span></code></pre>
-<pre class="code mono" id="code-rest" hidden><code>curl https://api.meridian.example/v1/payments \
-  -H <span class="s">"Authorization: Bearer mk_test_…"</span> \
-  -d <span class="s">'{"posId":"pos_paris_01","reference":"T-1042",</span>
-<span class="s">       "amount":2450,"currency":"EUR"}'</span>
-
-<span class="c"># → 201 {"state":"pending"}  puis  GET …/T-1042?waitMs=10000</span></code></pre>
-<pre class="code mono" id="code-nexo" hidden><code><span class="c">// Caisse nexo existante : seule l'adresse change</span>
-POST /v1/nexo
-{ <span class="s">"SaleToPOIRequest"</span>: {
-    <span class="s">"MessageHeader"</span>: { <span class="s">"MessageCategory"</span>: <span class="s">"Payment"</span>, <span class="s">"POIID"</span>: <span class="s">"pos_paris_01"</span> },
-    <span class="s">"PaymentRequest"</span>: { <span class="s">"PaymentTransaction"</span>: {
-        <span class="s">"AmountsReq"</span>: { <span class="s">"Currency"</span>: <span class="s">"EUR"</span>, <span class="s">"RequestedAmount"</span>: <span class="n">24.50</span> } } } } }</code></pre>
-    </div>
-  </div>
-
-  <div class="wrap section">
-    <div class="sec-head">
-      <p class="eyebrow" data-i18n="guar.eyebrow">Résilience</p>
-      <h2 data-i18n="v5.res.h">Le connecteur garantit l'issue de chaque paiement.</h2>
-    </div>
-    <div class="panel">
-    <table class="guar">
-      <thead><tr><th scope="col" data-i18n="guar.c1">Incident</th><th scope="col" data-i18n="guar.c2">Ce que fait Meridian</th><th scope="col" data-i18n="guar.c3">Résultat</th></tr></thead>
-      <tbody>
-        <tr><th scope="row" data-i18n="guar.r1.a">Le réseau coupe pendant l'autorisation</th><td data-i18n="guar.r1.b">Garde le paiement « en cours », jamais « échoué », et interroge le PSP</td><td><span class="pill ok mono" data-i18n="guar.one">1 débit</span></td></tr>
-        <tr><th scope="row" data-i18n="guar.r2.a">La réponse du PSP se perd</th><td data-i18n="guar.r2.b">Rejoue avec la même clé d'idempotence</td><td><span class="pill ok mono" data-i18n="guar.one">1 débit</span></td></tr>
-        <tr><th scope="row" data-i18n="guar.r3.a">Le serveur tombe en plein paiement</th><td data-i18n="guar.r3.b">Une autre instance reprend depuis le journal partagé</td><td><span class="pill ok mono" data-i18n="guar.one">1 débit</span></td></tr>
-        <tr><th scope="row" data-i18n="guar.r4.a">Le PSP principal est injoignable</th><td data-i18n="guar.r4.b">Bascule vers le PSP de secours, seulement si rien n'a été envoyé</td><td><span class="pill ok mono" data-i18n="guar.one">1 débit</span></td></tr>
-        <tr><th scope="row" data-i18n="guar.r5.a">L'annulation arrive trop tard</th><td data-i18n="guar.r5.b">Renvoie l'issue réelle et permet le remboursement</td><td><span class="pill mono" data-i18n="guar.r5.c">Issue réelle</span></td></tr>
-      </tbody>
-    </table>
-    <p class="panel-foot"><b data-i18n="guar.stat">0 double débit sur 200 séquences de pannes aléatoires, à chaque version.</b> <span data-i18n="stats.note">Résultats de notre suite de tests automatisée, sur simulateurs PSP fidèles aux API. Validation en sandbox réelle en cours.</span> <a class="link" href="#demo" data-i18n="v5.res.demo">Lancer la démo de panne</a></p>
-    </div>
   </div>
 
   <div class="wrap section">

@@ -546,3 +546,50 @@ input.st-search:focus{border-color:var(--accent);background:#fff}
 .models .hl-card h3{color:var(--blue-7)}.models .hl-card li{color:oklch(86% .02 275)}
 .models .hl-card .btn{background:#fff;color:var(--night);border-color:#fff}
 @media(max-width:900px){.models{grid-template-columns:1fr}}
+
+/* v9 — démo « connecter un PSP » */
+.store{position:relative}
+.try{position:absolute;top:-34px;left:4px;margin:0;font-size:13.5px;font-weight:500;color:var(--blue-6);display:flex;align-items:center;gap:8px}
+.try::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--blue-6);box-shadow:0 0 0 4px oklch(52% .23 275/.35);animation:pulse 2s infinite}
+.st-pos{margin-left:auto;font-size:12.5px;color:var(--mute);background:var(--gray-2);border:1px solid var(--hair);border-radius:999px;padding:4px 10px}
+.st-timer{font:500 12.5px var(--mono);color:var(--accent-ink);min-width:34px;text-align:right}
+.pane{display:none;min-height:430px}
+.store[data-pane=catalog] .pane-catalog,.store[data-pane=config] .pane-config,.store[data-pane=done] .pane-done{display:block;animation:paneIn .28s var(--ease)}
+@keyframes paneIn{from{opacity:0;transform:translateX(10px)}to{opacity:1;transform:none}}
+.st-connect{cursor:pointer;background:var(--accent);border-color:var(--accent)!important;color:#fff!important;font:inherit;font-size:12.5px;font-weight:500;animation:nudge 2.4s ease-in-out 1.2s 3}
+.st-connect:hover{background:var(--accent-hover)}
+@keyframes nudge{0%,100%{box-shadow:0 0 0 0 oklch(52% .23 275/0)}50%{box-shadow:0 0 0 6px oklch(52% .23 275/.25)}}
+.pane-config{padding:18px 22px 22px}
+.pane-config .back{font:inherit;font-size:13px;color:var(--accent-ink);background:none;border:0;padding:0;cursor:pointer;margin-bottom:14px}
+.pane-config .back::before{content:'← '}
+.cfg-head{display:flex;gap:14px;align-items:center;margin-bottom:18px}
+.cfg-head div{display:flex;flex-direction:column}.cfg-head b{font-weight:600;font-size:17px}.cfg-head small{color:var(--mute);font-size:12.5px}
+.pane-config label{display:flex;flex-direction:column;gap:6px;font-size:12.5px;font-weight:500;color:var(--ink2);margin-bottom:12px}
+.pane-config input{font:400 14px var(--mono);color:var(--ink);background:var(--gray-2);border:1px solid var(--hair);border-radius:10px;padding:10px 12px}
+.cfg-note{font-size:12px;color:var(--mute);margin:4px 0 16px}
+.st-go{width:100%}
+.pane-done{padding:28px 24px 24px;text-align:center}
+.done-check{width:64px;height:64px;border-radius:50%;margin:4px auto 16px;background:var(--ok-soft) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6 12.5l4 4 8-9' fill='none' stroke='%23157a4c' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/34px no-repeat;animation:pop .4s var(--ease)}
+@keyframes pop{from{transform:scale(.6);opacity:0}to{transform:none;opacity:1}}
+.done-h{font-size:20px;font-weight:600;margin:0 0 4px}
+.done-time{margin:0 0 18px;color:var(--accent-ink);font-weight:500}
+.done-steps{list-style:none;margin:0 auto 16px;padding:0;max-width:340px;text-align:left;display:flex;flex-direction:column;gap:8px}
+.done-steps li{position:relative;padding-left:26px;font-size:14px;color:var(--ink2)}
+.done-steps li::before{content:'✓';position:absolute;left:4px;color:var(--ok);font-weight:600}
+.done-pay{display:flex;justify-content:space-between;gap:12px;align-items:baseline;background:var(--gray-2);border:1px solid var(--hair);border-radius:12px;padding:12px 14px;margin:0 0 18px;text-align:left;font-size:13px;color:var(--mute)}
+.done-pay b{font:500 13px var(--mono);color:var(--ink);text-align:right}
+.done-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.done-actions .btn{min-height:44px;font-size:15px}
+.proof{padding-top:40px}
+.proof p{margin:0;padding:20px 24px;border-radius:var(--r-s);background:var(--surface);border:1px solid var(--hair);color:var(--ink2)}
+.proof b{color:var(--ink)}
+.proof .link{margin-left:6px;color:var(--accent-ink)}
+@media(prefers-reduced-motion:reduce){.pane,.done-check,.st-connect,.try::before{animation:none!important}}
+.hero-dark .store .btn{background:var(--accent);color:#fff;border-color:var(--accent)}
+.hero-dark .store .btn:hover{background:var(--accent-hover);border-color:var(--accent-hover)}
+.hero-dark .store .btn.ghost{background:transparent;color:var(--ink);border-color:var(--hair2)}
+.hero-dark .store .btn.ghost:hover{border-color:var(--ink);background:var(--gray-2)}
+.try{position:static;margin:0;padding:10px 18px;background:var(--blue-2);border-bottom:1px solid var(--blue-4);color:var(--accent-ink);font-size:13px}
+.try::before{background:var(--accent);box-shadow:0 0 0 4px var(--blue-4)}
+.hero-dark{margin-top:calc(-1 * var(--hd-h,72px));padding-top:var(--hd-h,72px)}
+@media(max-width:720px){.wins{display:none}.hero2{padding-top:32px}}

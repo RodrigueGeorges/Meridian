@@ -318,7 +318,7 @@
       const okCc = any || !stCc || d.dataset.cc.split(' ').includes(stCc);
       const okQ = any || !q || li.textContent.toLowerCase().includes(q);
       li.hidden = !(okCc && okQ);
-      if (!li.hidden && !any) (li.querySelector('.st-badge.ok') ? live++ : soon++);
+      if (!li.hidden && !any) (li.querySelector('.st-badge.ok, .st-connect') ? live++ : soon++);
     }
     const c = $('stCount'); if (c) c.textContent = t('v7.count', { live: String(live), soon: String(soon) });
   }
@@ -329,6 +329,45 @@
       filterStore();
     });
     $('stSearch')?.addEventListener('input', filterStore);
+  }
+
+
+  // ---------- Démo d'accueil : connecter un PSP ----------
+  function initConnect() {
+    const box = $('hstore'); if (!box) return;
+    let t0 = 0, tick = 0;
+    const timer = $('stTimer');
+    const fmt = (ms) => `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}`;
+    const startClock = () => { if (t0) return; t0 = performance.now(); tick = setInterval(() => { timer.textContent = fmt(performance.now() - t0); }, 250); };
+    const go = (pane) => {
+      box.dataset.pane = pane;
+      if (pane === 'catalog') { clearInterval(tick); t0 = 0; timer.textContent = ''; }
+      else startClock();
+      const focus = box.querySelector(`.pane-${pane} button, .pane-${pane} input`); focus?.focus({ preventScroll: true });
+    };
+    box.addEventListener('click', (ev) => { const b = ev.target.closest('[data-pane-go]'); if (b) go(b.dataset.paneGo); });
+    $('stConnect').addEventListener('click', async () => {
+      const btn = $('stConnect'); btn.disabled = true; btn.textContent = t('v9.testing');
+      let run;
+      try {
+        const r = await fetch('/v1/demo/run', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ scenario: 'nominal' }), signal: AbortSignal.timeout(20000) });
+        if (!r.ok) throw new Error(String(r.status));
+        run = await r.json();
+      } catch {
+        recorded ??= await fetch('demo-recorded.json').then((r) => r.json()).catch(() => null);
+        run = recorded?.nominal;
+      }
+      const elapsed = performance.now() - t0;
+      clearInterval(tick); timer.textContent = fmt(elapsed);
+      $('stDoneTime').textContent = t('v9.done.time', { s: String(Math.max(1, Math.round(elapsed / 1000))) });
+      const steps = [t('v9.s1'), t('v9.s2'), t('v9.s3')];
+      $('stSteps').replaceChildren(...steps.map((x) => { const li = document.createElement('li'); li.textContent = x; return li; }));
+      const fin = run?.journal?.at(-1)?.data?.receipt;
+      $('stPay').textContent = run ? `${money(run.amount, run.currency)} · ${t(`state.${run.state}`)}${fin?.last4 ? ` · ${String(fin.brand).toUpperCase()} •••• ${fin.last4}` : ''} · ${sec(run.durationMs).slice(1)}` : '—';
+      btn.disabled = false; btn.textContent = t('v9.connect');
+      box.dataset.pane = 'done';
+      $('stAgain').focus({ preventScroll: true });
+    });
   }
 
   // ---------- Démo ----------
@@ -458,6 +497,9 @@
     initCode();
     initContact();
     initStore();
+    initConnect();
+    const hdH = () => document.documentElement.style.setProperty('--hd-h', `${document.querySelector('.hd').offsetHeight}px`);
+    hdH(); addEventListener('resize', hdH);
     initWire();
     initStory();
     addEventListener('scroll', headerTone, { passive: true });
