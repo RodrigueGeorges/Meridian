@@ -20,6 +20,14 @@ curl -X POST localhost:8080/v1/payments -H "authorization: Bearer mk_test_demo01
   -d '{"posId":"pos_demo_FR","reference":"CMD-0412","amount":2450,"currency":"EUR","waitMs":8000}'
 ```
 
+## Démo pour rendez-vous
+
+```bash
+pnpm demo                       # tout en mémoire : simulateurs, API, site, passerelles Concert (8888) et ZVT (20007)
+pnpm caisse 24.50               # une caisse Concert envoie sa trame habituelle à Meridian
+pnpm caisse 112.45 --panne      # idem avec une coupure réseau de 2,5 s en plein paiement : accepté, 1 débit
+```
+
 ## Tests
 
 64 tests (moteur, conformité, propriétés, API mémoire et PostgreSQL, passerelles, cluster). Les tests PostgreSQL et cluster tournent si `DATABASE_URL` est défini.

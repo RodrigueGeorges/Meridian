@@ -15,7 +15,9 @@
     "api": "tsx apps/api/src/main.ts",
     "migrate": "tsx packages/store-pg/src/migrate.ts",
     "dev": "concurrently -n sim,api \"pnpm sim\" \"pnpm api\"",
-    "sandbox": "node tools/sandbox-check/meridian-sandbox-test.mjs"
+    "sandbox": "node tools/sandbox-check/meridian-sandbox-test.mjs",
+    "demo": "tsx tools/demo/main.ts",
+    "caisse": "tsx tools/demo/caisse.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
