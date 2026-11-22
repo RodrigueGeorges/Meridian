@@ -354,7 +354,7 @@
  "ct.country": "Land",
  "ct.msg": "Ihr Projekt (optional)",
  "ct.send": "Anfrage senden",
- "ct.legal": "Ihre Angaben dienen nur der Kontaktaufnahme zu Meridian.",
+ "ct.legal": "Meridian verarbeitet diese Daten, um Ihre Anfrage zu beantworten und die Geschäftsbeziehung zu pflegen (berechtigtes Interesse). Speicherdauer: 3 Jahre nach Ihrer Anfrage. Sie können Auskunft, Berichtigung oder Löschung verlangen oder der Verarbeitung widersprechen. <a href=\"privacy.html\">Datenschutzerklärung (EN)</a>",
  "ct.invalid": "Bitte Name, Unternehmen und E-Mail prüfen.",
  "ct.sending": "Wird gesendet…",
  "ct.sent": "Anfrage gesendet. Wir melden uns zeitnah.",
@@ -432,5 +432,11 @@
  "v9.again": "Neu starten",
  "v9.proof.h": "Und wenn das Netz ausfällt?",
  "v9.proof.p": "Meridian hält die Zahlung in Bearbeitung und ermittelt ihr tatsächliches Ergebnis beim PSP: null Doppelbelastungen bei 200 Störungsfolgen, getestet bei jeder Version.",
- "v9.proof.cta": "Störungs-Demo ansehen"
+ "v9.proof.cta": "Störungs-Demo ansehen",
+ "ft.l.nav": "Rechtliche Hinweise",
+ "ft.l.notice": "Impressum",
+ "ft.l.privacy": "Datenschutz",
+ "ft.l.contact": "Kontakt",
+ "a11y.cmp": "Vergleich",
+ "a11y.crit": "Kriterium"
 }

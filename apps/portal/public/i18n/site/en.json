@@ -354,7 +354,7 @@
  "ct.country": "Country",
  "ct.msg": "Your project (optional)",
  "ct.send": "Send request",
- "ct.legal": "Your details are only used to contact you about Meridian.",
+ "ct.legal": "Meridian processes this data to answer your request and follow up commercially (legitimate interest). Kept for 3 years after your request. You can access, rectify or erase it, or object to its processing. <a href=\"privacy.html\">Privacy policy</a>",
  "ct.invalid": "Check the name, company and email.",
  "ct.sending": "Sending…",
  "ct.sent": "Request sent. We'll get back to you shortly.",
@@ -432,5 +432,11 @@
  "v9.again": "Start again",
  "v9.proof.h": "And when the network drops?",
  "v9.proof.p": "Meridian keeps the payment in progress and recovers its real outcome from the PSP: zero double charges across 200 failure sequences tested on every release.",
- "v9.proof.cta": "See the outage demo"
+ "v9.proof.cta": "See the outage demo",
+ "ft.l.nav": "Legal information",
+ "ft.l.notice": "Legal notice",
+ "ft.l.privacy": "Privacy",
+ "ft.l.contact": "Contact",
+ "a11y.cmp": "Comparison",
+ "a11y.crit": "Criterion"
 }

@@ -354,7 +354,7 @@
  "ct.country": "Land",
  "ct.msg": "Uw project (optioneel)",
  "ct.send": "Aanvraag versturen",
- "ct.legal": "Uw gegevens worden alleen gebruikt om contact met u op te nemen over Meridian.",
+ "ct.legal": "Meridian verwerkt deze gegevens om uw aanvraag te beantwoorden en de zakelijke relatie op te volgen (gerechtvaardigd belang). Bewaard tot 3 jaar na uw aanvraag. U kunt ze inzien, corrigeren of laten wissen, of bezwaar maken tegen de verwerking. <a href=\"privacy.html\">Privacybeleid (EN)</a>",
  "ct.invalid": "Controleer naam, bedrijf en e-mailadres.",
  "ct.sending": "Versturen…",
  "ct.sent": "Aanvraag verstuurd. We nemen snel contact met u op.",
@@ -432,5 +432,11 @@
  "v9.again": "Opnieuw",
  "v9.proof.h": "En als het netwerk wegvalt?",
  "v9.proof.p": "Meridian houdt de betaling bezig en achterhaalt de echte uitkomst bij de PSP: nul dubbele afschrijvingen bij 200 storingsreeksen, getest bij elke versie.",
- "v9.proof.cta": "Bekijk de storingsdemo"
+ "v9.proof.cta": "Bekijk de storingsdemo",
+ "ft.l.nav": "Juridische informatie",
+ "ft.l.notice": "Colofon",
+ "ft.l.privacy": "Privacy",
+ "ft.l.contact": "Contact",
+ "a11y.cmp": "Vergelijking",
+ "a11y.crit": "Criterium"
 }

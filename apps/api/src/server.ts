@@ -1,8 +1,11 @@
 // API publique Meridian : 5 appels de paiement, points de vente, catalogue. Le moteur tourne dans le même process
 // (worker intégré) et reprend les paiements inachevés au démarrage.
 import { createHash, createHmac, randomBytes } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import fastifyCompress from '@fastify/compress';
+import fastifyHelmet from '@fastify/helmet';
 import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyRequest } from 'fastify';
 import { z, ZodError } from 'zod';
@@ -25,6 +28,12 @@ export interface ServerOptions {
   demoSeed?: { stripeUrl: string; secoursUrl: string };
   engine?: { pollMs?: number; retryMs?: number; payTimeoutMs?: number; scanMs?: number };
   logger?: boolean;
+  /** Derrière un proxy (Fly) : lire l'IP client dans X-Forwarded-For. Ne jamais activer sans proxy de confiance. */
+  trustProxy?: boolean;
+  /** URL publique du site, pour robots.txt et sitemap.xml (ex. https://meridian.example). */
+  publicUrl?: string;
+  /** Durée de conservation des demandes de contact, en jours (défaut 1095 = 3 ans). */
+  contactRetentionDays?: number;
   /** Passerelles pour caisses existantes. À exposer uniquement sur le réseau local du magasin (agent local). */
   bridges?: { concertPort?: number; concertMap?: Record<string, string>; zvtPort?: number; zvtPosId?: string; host?: string };
 }
@@ -38,7 +47,24 @@ interface KeyStore {
 const sha = (s: string) => createHash('sha256').update(s).digest('hex');
 
 export async function buildServer(o: ServerOptions) {
-  const app = Fastify({ logger: o.logger ? { level: 'info', redact: ['req.headers.authorization'] } : false });
+  const app = Fastify({ trustProxy: o.trustProxy ?? false, logger: o.logger ? { level: 'info', redact: ['req.headers.authorization'] } : false });
+
+  // ---------- En-têtes de sécurité et compression ----------
+  await app.register(fastifyHelmet, {
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"], scriptSrc: ["'self'"], styleSrc: ["'self'"], styleSrcAttr: ["'unsafe-inline'"],
+        imgSrc: ["'self'", 'data:'], fontSrc: ["'self'"], connectSrc: ["'self'"], objectSrc: ["'none'"],
+        baseUri: ["'self'"], formAction: ["'self'"], frameAncestors: ["'none'"], upgradeInsecureRequests: null,
+      },
+    },
+    strictTransportSecurity: { maxAge: 31_536_000, includeSubDomains: true },
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+  });
+  app.addHook('onSend', async (_req, reply) => {
+    reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()');
+  });
+  await app.register(fastifyCompress, { global: true, threshold: 1024 });
 
   // ---------- Stockage ----------
   let store: JournalStore;
@@ -181,12 +207,43 @@ export async function buildServer(o: ServerOptions) {
     return pos;
   };
 
+  // ---------- Limites de débit (partagées entre instances si PostgreSQL) ----------
+  // La clé est une empreinte HMAC de l'IP : l'adresse en clair n'est jamais stockée.
+  const ipKey = (ip: string) => createHmac('sha256', o.journalKey).update(`ip:${ip}`).digest('hex').slice(0, 32);
+  const memHits = new Map<string, number[]>();
+  const allow = async (bucket: string, ip: string, max: number, windowMs: number): Promise<boolean> => {
+    const key = ipKey(ip);
+    if (pool) {
+      const r = await pool.query(
+        `WITH c AS (SELECT count(*)::int AS n FROM rate_hits WHERE bucket=$1 AND key=$2 AND at > now() - make_interval(secs => $3::double precision))
+         INSERT INTO rate_hits (bucket, key) SELECT $1, $2 FROM c WHERE c.n < $4 RETURNING 1`,
+        [bucket, key, windowMs / 1000, max]);
+      return r.rowCount === 1;
+    }
+    const now = Date.now(), id = `${bucket}:${key}`;
+    const recent = (memHits.get(id) ?? []).filter((t) => now - t < windowMs);
+    if (recent.length >= max) return false;
+    memHits.set(id, [...recent, now]);
+    return true;
+  };
+  // Purge RGPD : traces de limite de débit après 24 h, demandes de contact après la durée de conservation.
+  const retentionDays = o.contactRetentionDays ?? 1095;
+  const purge = async () => {
+    if (!pool) return;
+    try {
+      await pool.query("DELETE FROM rate_hits WHERE at < now() - interval '1 day'");
+      await pool.query('DELETE FROM contact_requests WHERE created_at < now() - make_interval(days => $1::int)', [retentionDays]);
+    } catch (e) { app.log.warn({ err: e }, 'purge'); }
+  };
+  void purge();
+  const purgeTimer = setInterval(() => void purge(), 3_600_000);
+  purgeTimer.unref();
+
   // ---------- Démo publique « Essayez de le casser » (mode démo uniquement) ----------
   // Vraies pannes injectées dans le simulateur PSP, vrai moteur, vrai journal ; une exécution à la fois.
   if (o.demoSeed) {
     const seed = o.demoSeed;
     let queue: Promise<unknown> = Promise.resolve();
-    const hits = new Map<string, number[]>();
     const simDebits = async () => {
       const [a, b] = await Promise.all([seed.stripeUrl, seed.secoursUrl].map((u) => fetch(`${u}/__state`).then((r) => r.json() as Promise<{ debits: number }>)));
       return a!.debits + b!.debits;
@@ -197,9 +254,7 @@ export async function buildServer(o: ServerOptions) {
     app.post('/v1/demo/run', async (req, reply) => {
       const { scenario, amount } = z.object({ scenario: z.enum(SCENARIOS), amount: z.number().int().min(100).max(50_000).default(2450) }).parse(req.body ?? {});
       const now = Date.now();
-      const recent = (hits.get(req.ip) ?? []).filter((t) => now - t < 60_000);
-      if (recent.length >= 12) return reply.code(429).send({ error: { code: 'rate_limited', message: 'Trop de démos, réessayez dans une minute' } });
-      hits.set(req.ip, [...recent, now]);
+      if (!(await allow('demo', req.ip, 12, 60_000))) return reply.code(429).send({ error: { code: 'rate_limited', message: 'Trop de démos, réessayez dans une minute' } });
       const run = async () => {
         const posId = 'pos_demo_FR';
         const reference = `DEMO-${now.toString(36)}-${randomBytes(3).toString('hex')}`.toUpperCase();
@@ -228,7 +283,6 @@ export async function buildServer(o: ServerOptions) {
 
   // ---------- Contact (site public) ----------
   const contacts: unknown[] = [];
-  const contactHits = new Map<string, number[]>();
   app.post('/v1/contact', async (req, reply) => {
     const body = z.object({
       role: z.enum(['software', 'psp', 'other']),
@@ -240,10 +294,7 @@ export async function buildServer(o: ServerOptions) {
       lang: z.string().max(5).optional(),
       website: z.string().max(0).optional(), // champ piège anti-robot : doit rester vide
     }).parse(req.body ?? {});
-    const now = Date.now();
-    const recent = (contactHits.get(req.ip) ?? []).filter((t) => now - t < 3_600_000);
-    if (recent.length >= 5) return reply.code(429).send({ error: { code: 'rate_limited', message: 'Trop de demandes, réessayez plus tard' } });
-    contactHits.set(req.ip, [...recent, now]);
+    if (!(await allow('contact', req.ip, 5, 3_600_000))) return reply.code(429).send({ error: { code: 'rate_limited', message: 'Trop de demandes, réessayez plus tard' } });
     const id = `ct_${randomBytes(8).toString('hex')}`;
     const rec = { id, role: body.role, name: body.name, company: body.company, email: body.email, country: body.country ?? null, message: body.message ?? null, lang: body.lang ?? null };
     if (pool) {
@@ -397,12 +448,44 @@ export async function buildServer(o: ServerOptions) {
 
   // ---------- Portail ----------
   const portalDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'portal', 'public');
-  await app.register(fastifyStatic, { root: portalDir, prefix: '/portal/' });
+  await app.register(fastifyStatic, {
+    root: portalDir, prefix: '/portal/', cacheControl: false, index: false,
+    setHeaders: (res, path) => {
+      // HTML toujours revalidé ; polices immuables ; le reste court + revalidation (empreintes de fichiers : semaine 2).
+      if (path.endsWith('.html')) res.setHeader('Cache-Control', 'no-cache');
+      else if (path.includes('/fonts/')) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      else res.setHeader('Cache-Control', 'public, max-age=600, stale-while-revalidate=86400');
+    },
+  });
   app.get('/', async (_req, reply) => reply.redirect('/portal/'));
+  // Pages HTML publiques : l'URL absolue du site ({{BASE}}) est injectée pour canonical, hreflang et Open Graph.
+  const PAGES: Record<string, string> = {
+    '/portal/': 'index.html', '/portal/index.html': 'index.html',
+    '/portal/mentions-legales.html': 'mentions-legales.html', '/portal/legal-notice.html': 'legal-notice.html',
+    '/portal/confidentialite.html': 'confidentialite.html', '/portal/privacy.html': 'privacy.html',
+  };
+  for (const [route, file] of Object.entries(PAGES)) {
+    app.get(route, async (req, reply) => {
+      const html = (await readFile(join(portalDir, file), 'utf8')).replaceAll('{{BASE}}', base(req));
+      return reply.type('text/html; charset=utf-8').header('Cache-Control', 'no-cache').send(html);
+    });
+  }
+  const base = (req: FastifyRequest) => (o.publicUrl ?? `${req.protocol}://${req.host}`).replace(/\/$/, '');
+  app.get('/robots.txt', async (req, reply) => reply.type('text/plain; charset=utf-8').header('Cache-Control', 'public, max-age=3600')
+    .send(`User-agent: *\nAllow: /portal/\nDisallow: /v1/\nDisallow: /portal/console.html\n\nSitemap: ${base(req)}/sitemap.xml\n`));
+  app.get('/sitemap.xml', async (req, reply) => {
+    const b = base(req);
+    const alt = (fr: string, en: string) => [fr, en].map((u) => `  <url><loc>${b}/portal/${u}</loc>`
+      + `<xhtml:link rel="alternate" hreflang="fr" href="${b}/portal/${fr}"/><xhtml:link rel="alternate" hreflang="en" href="${b}/portal/${en}"/></url>`).join('\n');
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n`
+      + `  <url><loc>${b}/portal/</loc></url>\n${alt('mentions-legales.html', 'legal-notice.html')}\n${alt('confidentialite.html', 'privacy.html')}\n</urlset>\n`;
+    return reply.type('application/xml; charset=utf-8').header('Cache-Control', 'public, max-age=3600').send(xml);
+  });
 
   app.addHook('onClose', async () => {
     engine.kill();
     if (webhookTimer) clearInterval(webhookTimer);
+    clearInterval(purgeTimer);
     await cluster?.close();
     await Promise.all(netServers.map((s) => new Promise((r) => s.close(r))));
     await pool?.end();

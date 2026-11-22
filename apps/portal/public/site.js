@@ -48,6 +48,13 @@
       const k = el.getAttribute('data-i18n-html');
       if (dict[k] !== undefined) el.innerHTML = dict[k];
     }
+    for (const el of document.querySelectorAll('[data-i18n-aria]')) {
+      const k = el.getAttribute('data-i18n-aria');
+      if (dict[k] !== undefined) el.setAttribute('aria-label', dict[k]);
+    }
+    // Pages légales : français pour FR, anglais pour les autres langues.
+    const legal = lang === 'fr' ? { notice: 'mentions-legales.html', privacy: 'confidentialite.html' } : { notice: 'legal-notice.html', privacy: 'privacy.html' };
+    for (const a of document.querySelectorAll('[data-legal]')) a.setAttribute('href', legal[a.getAttribute('data-legal')]);
     document.title = t('meta.title');
     document.querySelector('meta[name=description]').setAttribute('content', t('meta.desc'));
     renderCoverage();

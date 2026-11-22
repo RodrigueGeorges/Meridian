@@ -21,6 +21,9 @@ const { app } = await buildServer({
   webhookSecret: env.WEBHOOK_SECRET,
   demoSeed: env.DEMO_SEED === 'true' ? { stripeUrl: required('SIM_STRIPE_URL'), secoursUrl: required('SIM_SECOURS_URL') } : undefined,
   logger: true,
+  trustProxy: env.TRUST_PROXY === 'true',
+  publicUrl: env.PUBLIC_URL,
+  contactRetentionDays: env.CONTACT_RETENTION_DAYS ? Number(env.CONTACT_RETENTION_DAYS) : undefined,
   engine: env.SCAN_MS ? { scanMs: Number(env.SCAN_MS) } : undefined,
   bridges: {
     host: env.BRIDGE_HOST,

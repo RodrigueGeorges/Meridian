@@ -3,8 +3,22 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Meridian</title>
-<meta name="description" content="">
+<title>Meridian — Le connecteur universel entre les caisses et les PSP</title>
+<meta name="description" content="Connecteur de paiement neutre pour caisses et bornes en Europe : un SDK, tous les PSP, aucun double débit, une preuve pour chaque paiement.">
+<link rel="canonical" href="{{BASE}}/portal/">
+<meta name="theme-color" content="#12121A">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Meridian">
+<meta property="og:title" content="Meridian — Le connecteur universel entre les caisses et les PSP">
+<meta property="og:description" content="Connecteur de paiement neutre pour caisses et bornes en Europe : un SDK, tous les PSP, aucun double débit, une preuve pour chaque paiement.">
+<meta property="og:url" content="{{BASE}}/portal/">
+<meta property="og:image" content="{{BASE}}/portal/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Meridian, le connecteur universel entre les caisses et les PSP">
+<meta property="og:locale" content="fr_FR">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2312121A'/%3E%3Ccircle cx='16' cy='16' r='10' fill='none' stroke='%23fff' stroke-width='2'/%3E%3Cpath d='M16 6C10 10.5 10 21.5 16 26' fill='none' stroke='%236F7CFF' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="preload" href="fonts/instrument-sans-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="fonts.css">
@@ -180,9 +194,9 @@
       <p class="eyebrow" data-i18n="v7.cmp.k">Pourquoi Meridian</p>
       <h2 data-i18n="v7.cmp.h">La seule approche pensée pour l'éditeur de caisse.</h2>
     </div>
-    <div class="panel cmp-wrap">
+    <div class="panel cmp-wrap" tabindex="0" role="region" aria-label="Comparatif" data-i18n-aria="a11y.cmp">
       <table class="cmp">
-        <thead><tr><th scope="col"></th><th scope="col" data-i18n="v7.cmp.c1">Intégrations directes</th><th scope="col" data-i18n="v7.cmp.c2">Terminal d'un seul PSP</th><th scope="col" data-i18n="v7.cmp.c3">Orchestrateur pour marchands</th><th scope="col" class="me">Meridian</th></tr></thead>
+        <thead><tr><th scope="col"><span class="sr" data-i18n="a11y.crit">Critère</span></th><th scope="col" data-i18n="v7.cmp.c1">Intégrations directes</th><th scope="col" data-i18n="v7.cmp.c2">Terminal d'un seul PSP</th><th scope="col" data-i18n="v7.cmp.c3">Orchestrateur pour marchands</th><th scope="col" class="me">Meridian</th></tr></thead>
         <tbody>
           <tr><th scope="row" data-i18n="v7.cmp.r1">Le marchand garde son PSP</th><td class="y">✓</td><td class="n">✗</td><td class="y">✓</td><td class="me y">✓</td></tr>
           <tr><th scope="row" data-i18n="v7.cmp.r2">Une seule intégration pour l'éditeur</th><td class="n">✗</td><td class="y">✓</td><td class="p" data-i18n="v7.cmp.r2c">Par marchand</td><td class="me y">✓</td></tr>
@@ -284,7 +298,7 @@
       <h2 data-i18n="sw.api.h">Cinq appels. Pas un de plus.</h2>
       <p data-i18n="sw.api.p">payer, état, annuler, rembourser, reçu. Le SDK gère les rejeux, les délais et les réponses perdues. Votre code ne connaît pas le PSP.</p>
     </div>
-    <pre class="code mono" aria-label="Exemple de code"><code><span class="c">// npm i @meridian/sdk</span>
+    <pre class="code mono" tabindex="0" aria-label="Exemple de code"><code><span class="c">// npm i @meridian/sdk</span>
 const m = new Meridian({ apiKey, posId });
 
 await m.pay({ reference: 'T-1042', amount: 2450, currency: 'EUR' });
@@ -335,7 +349,7 @@ const r = await m.receipt('T-1042');   <span class="c">// ticket + preuve</span>
       <h2 data-i18n="psp.mod.h">Un module déclaratif, pas un projet.</h2>
       <p data-i18n="psp.mod.p">Vous décrivez votre API dans un fichier : étapes, clés d'idempotence, lecture d'état, codes de refus. Aucun code dans le moteur. Le module est refusé s'il ne garantit pas l'idempotence.</p>
     </div>
-    <pre class="code mono" aria-label="Exemple de module"><code>{
+    <pre class="code mono" tabindex="0" aria-label="Exemple de module"><code>{
   "id": "votre-psp",
   "countries": ["FR", "BE", "DE"],
   "pay": [
@@ -409,7 +423,7 @@ const r = await m.receipt('T-1042');   <span class="c">// ticket + preuve</span>
     <input class="hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
     <p class="ct-status" id="ctStatus" role="status"></p>
     <button class="btn" type="button" id="ctSend" data-i18n="ct.send">Envoyer la demande</button>
-    <p class="ct-legal" data-i18n="ct.legal">Vos coordonnées servent uniquement à vous recontacter au sujet de Meridian.</p>
+    <p class="ct-legal" id="ctLegal" data-i18n-html="ct.legal">Meridian traite ces données pour répondre à votre demande et assurer le suivi commercial (intérêt légitime). Conservation : 3 ans après votre demande. Vous pouvez y accéder, les rectifier, les effacer ou vous opposer à leur traitement. <a href="confidentialite.html">Politique de confidentialité</a></p>
   </form>
 </dialog>
 
@@ -417,6 +431,7 @@ const r = await m.receipt('T-1042');   <span class="c">// ticket + preuve</span>
   <div class="wrap ft-in">
     <div class="logo"><svg viewBox="0 0 32 32" width="20" height="20" aria-hidden="true"><circle cx="16" cy="16" r="12" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 4C8.5 9.5 8.5 22.5 16 28" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/><path d="M16 4C23.5 9.5 23.5 22.5 16 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" opacity=".25"/></svg><span>Meridian</span></div>
     <p data-i18n="ft.p">Connecteur de paiement neutre pour caisses et bornes. Europe.</p>
+    <nav class="ft-links" aria-label="Informations légales" data-i18n-aria="ft.l.nav"><a href="mentions-legales.html" data-legal="notice" data-i18n="ft.l.notice">Mentions légales</a><a href="confidentialite.html" data-legal="privacy" data-i18n="ft.l.privacy">Confidentialité</a><button type="button" data-contact="other" data-i18n="ft.l.contact">Contact</button></nav>
     <p class="ft-small" data-i18n="ft.marks">Les noms de PSP cités sont des marques de leurs propriétaires respectifs. Leur mention indique un connecteur disponible ou prévu, pas un partenariat.</p>
     <p class="ft-small" data-i18n="ft.legal">Meridian est un prestataire technique : il ne détient pas de fonds, ne conclut pas de contrat avec les marchands et ne stocke pas de numéro de carte complet. Les paiements sont exécutés par les PSP choisis par les marchands. Version de démonstration ; résultats obtenus sur simulateurs PSP.</p>
   </div>

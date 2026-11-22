@@ -27,3 +27,13 @@ Base : voir `infra/postgres-eu.md` (Neon/Supabase/Scaleway en région UE). Pour 
 ## 4. Image Docker
 `docker compose up --build` en local (API 8080, Concert 8888, ZVT 20007, portail sur `/portal/`).
 Les étapes de l'image ont été rejouées sans Docker : installation figée OK, démarrage OK.
+
+## Variables du site public (ajoutées en semaine 1 de l'audit)
+
+| Variable | Rôle | Valeur en production |
+| --- | --- | --- |
+| `TRUST_PROXY` | Lit l'IP client derrière le proxy Fly (limites de débit par visiteur) | `true` (déjà dans `infra/fly/api.toml`) |
+| `PUBLIC_URL` | URL absolue du site pour canonical, hreflang, Open Graph, robots.txt et sitemap | `https://<domaine>` |
+| `CONTACT_RETENTION_DAYS` | Conservation des demandes de contact, purge automatique horaire | `1095` (3 ans, valeur par défaut) |
+
+Avant la mise en ligne : compléter les champs surlignés de `mentions-legales.html`, `legal-notice.html`, `confidentialite.html` et `privacy.html` (société, siège, RCS, directeur de la publication, adresse de l'hébergeur, mécanisme de transfert Fly.io, contact données personnelles).

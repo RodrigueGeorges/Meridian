@@ -3,8 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/server.ts" },
+  "exports": {
+    ".": "./src/server.ts"
+  },
   "dependencies": {
+    "@fastify/compress": "^8",
+    "@fastify/helmet": "^13",
     "@fastify/static": "^8.0.3",
     "@meridian/bridges": "workspace:*",
     "@meridian/core": "workspace:*",

@@ -8,6 +8,7 @@ primary_region = "cdg"
 
 [env]
   PORT = "8080"
+  TRUST_PROXY = "true"
   ALLOW_TEST_BASE_URL = "true"
   DEMO_SEED = "true"
   SIM_STRIPE_URL = "http://meridian-sim-demo.internal:12111"

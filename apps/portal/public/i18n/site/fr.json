@@ -354,7 +354,7 @@
  "ct.country": "Pays",
  "ct.msg": "Votre projet (facultatif)",
  "ct.send": "Envoyer la demande",
- "ct.legal": "Vos coordonnées servent uniquement à vous recontacter au sujet de Meridian.",
+ "ct.legal": "Meridian traite ces données pour répondre à votre demande et assurer le suivi commercial (intérêt légitime). Conservation : 3 ans après votre demande. Vous pouvez y accéder, les rectifier, les effacer ou vous opposer à leur traitement. <a href=\"confidentialite.html\">Politique de confidentialité</a>",
  "ct.invalid": "Vérifiez le nom, la société et l'e-mail.",
  "ct.sending": "Envoi…",
  "ct.sent": "Demande envoyée. Nous revenons vers vous rapidement.",
@@ -432,5 +432,11 @@
  "v9.again": "Recommencer",
  "v9.proof.h": "Et quand le réseau coupe ?",
  "v9.proof.p": "Meridian garde le paiement en cours et retrouve son issue réelle chez le PSP : zéro double débit sur 200 séquences de pannes testées à chaque version.",
- "v9.proof.cta": "Voir la démo de panne"
+ "v9.proof.cta": "Voir la démo de panne",
+ "ft.l.nav": "Informations légales",
+ "ft.l.notice": "Mentions légales",
+ "ft.l.privacy": "Confidentialité",
+ "ft.l.contact": "Contact",
+ "a11y.cmp": "Comparatif",
+ "a11y.crit": "Critère"
 }

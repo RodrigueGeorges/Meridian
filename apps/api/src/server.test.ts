@@ -127,5 +127,35 @@ for (const mode of ['memory', 'postgres'] as const) {
       const mods = await (await fetch(`${base}/v1/modules`)).json();
       expect(mods.map((m: { id: string }) => m.id)).toContain('stripe-terminal');
     });
+
+    it('site public : en-têtes de sécurité, compression, robots, sitemap, URL absolues, pages légales', async () => {
+      const home = await fetch(`${base}/portal/`, { headers: { 'accept-encoding': 'br' } });
+      expect(home.headers.get('content-security-policy')).toContain("script-src 'self'");
+      expect(home.headers.get('content-security-policy')).toContain("frame-ancestors 'none'");
+      expect(home.headers.get('strict-transport-security')).toContain('max-age=31536000');
+      expect(home.headers.get('x-content-type-options')).toBe('nosniff');
+      expect(home.headers.get('content-encoding')).toBe('br');
+      expect(home.headers.get('cache-control')).toBe('no-cache');
+      const html = await home.text();
+      expect(html).not.toContain('{{BASE}}');
+      expect(html).toContain(`<link rel="canonical" href="${base}/portal/">`);
+      const font = await fetch(`${base}/portal/fonts/instrument-sans-latin-500-normal.woff2`);
+      expect(font.headers.get('cache-control')).toContain('immutable');
+      expect(await (await fetch(`${base}/robots.txt`)).text()).toContain(`Sitemap: ${base}/sitemap.xml`);
+      const map = await (await fetch(`${base}/sitemap.xml`)).text();
+      expect(map).toContain(`${base}/portal/confidentialite.html`);
+      for (const f of ['mentions-legales', 'legal-notice', 'confidentialite', 'privacy']) {
+        expect((await fetch(`${base}/portal/${f}.html`)).status).toBe(200);
+      }
+    });
+
+    it('contact : limite de 5 demandes par heure et par adresse', async () => {
+      const post = () => fetch(`${base}/v1/contact`, { method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ role: 'psp', name: 'Test', company: 'Acme', email: 'a@acme.example' }) });
+      const codes: number[] = [];
+      for (let i = 0; i < 6; i++) codes.push((await post()).status);
+      expect(codes).toContain(429);
+      expect(codes.at(-1)).toBe(429);
+    });
   });
 }
