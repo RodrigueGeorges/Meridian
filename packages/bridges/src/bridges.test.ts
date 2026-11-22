@@ -3,9 +3,9 @@ import net from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
 import { harness } from '../../../conformance/harness.ts';
 import { buildTlv, createConcertServer, parseTlv } from './concert.ts';
-import { handleNexo } from './nexo.ts';
+import { handleNexo, nexoFromXml, nexoToXml } from './nexo.ts';
 import { engineTarget } from './target.ts';
-import { ACK, apdu, createZvtServer, readApdu, toBcd } from './zvt.ts';
+import { ACK, apdu, createZvtServer, fromBcd, readApdu, toBcd } from './zvt.ts';
 
 type H = Awaited<ReturnType<typeof harness>>;
 let h: H | undefined;
@@ -66,6 +66,16 @@ describe('Passerelle Concert / Caisse-AP', () => {
     expect(rf.AE).toBe('10');
     expect(h.sims.stripe.state.refunds.size).toBe(1);
   });
+  it('annulation (CD 2) de la dernière opération de ce montant ; rien à annuler → AF 05', async () => {
+    h = await harness();
+    srv = createConcertServer(engineTarget(h.engine), { posFor: (ca) => (ca === '01' ? h!.posId : undefined) });
+    const port = await listen(srv);
+    expect((await concertCall(port, { ...BASE, CB: '1890', CD: '0' })).AE).toBe('10');
+    expect((await concertCall(port, { ...BASE, CB: '1890', CD: '2' })).AE).toBe('10');
+    expect(h.sims.stripe.state.refunds.size).toBe(1);
+    expect(await concertCall(port, { ...BASE, CB: '1890', CD: '2' })).toMatchObject({ AE: '01', AF: '05' });
+    expect(h.sims.debits()).toBe(1);
+  });
   it('carte refusée → AE 01 AF 04 ; requête incomplète → AF 09 ; caisse inconnue → AF 05', async () => {
     h = await harness();
     srv = createConcertServer(engineTarget(h.engine), { posFor: (ca) => (ca === '01' ? h!.posId : undefined) });
@@ -114,6 +124,27 @@ describe('Passerelle ZVT', () => {
     expect(rev.at(-1)!.toString('hex')).toBe('060f00');
     expect(h.sims.stripe.state.refunds.size).toBe(1);
   });
+  it('Refund (06 31), End-of-Day (06 50) avec total net, Log-Off, Status Enquiry et Diagnosis', async () => {
+    h = await harness({ country: 'DE' });
+    srv = createZvtServer(engineTarget(h.engine), { posId: h.posId });
+    const port = await listen(srv);
+    for (const amount of [2450, 1000]) {
+      const f = await zvtCall(port, apdu(0x06, 0x01, [0x04, ...toBcd(amount, 6), 0x49, 0x09, 0x78]));
+      expect(f.at(-1)!.toString('hex')).toBe('060f00');
+    }
+    const rf = await zvtCall(port, apdu(0x06, 0x31, [0x04, ...toBcd(500, 6)]));
+    expect(rf.at(-1)!.toString('hex')).toBe('060f00');
+    expect(h.sims.stripe.state.refunds.size).toBe(1);
+    const eod = await zvtCall(port, apdu(0x06, 0x50, [0x00, 0x00, 0x00]));
+    const st = eod.find((f) => f[0] === 0x04 && f[1] === 0x0f)!;
+    expect(st.subarray(3, 5).toString('hex')).toBe('2700');
+    expect(fromBcd(st.subarray(6, 12))).toBe(2450 + 1000 - 500);
+    const eod2 = await zvtCall(port, apdu(0x06, 0x50, [0x00, 0x00, 0x00]));
+    expect(fromBcd(eod2.find((f) => f[0] === 0x04)!.subarray(6, 12))).toBe(0); // remis à zéro après clôture
+    for (const [c, i] of [[0x06, 0x02], [0x05, 0x01], [0x06, 0x70]] as const) {
+      expect((await zvtCall(port, apdu(c, i))).map((f) => f.toString('hex'))).toEqual(['800000', '060f00']);
+    }
+  });
   it('refus → Abort 06 1E', async () => {
     h = await harness({ country: 'DE' });
     srv = createZvtServer(engineTarget(h.engine), { posId: h.posId });
@@ -142,6 +173,33 @@ describe('Passerelle nexo Retailer', () => {
     const rev = await handleNexo({ SaleToPOIRequest: { MessageHeader: hdr(h.posId, 'Reversal'), ReversalRequest: { OriginalPOITransaction: { POITransactionID: { TransactionID: 'NEXO-1' } } } } }, t);
     expect(rev.SaleToPOIResponse.ReversalResponse.Response.Result).toBe('Success');
     expect(rev.SaleToPOIResponse.ReversalResponse.ReversedAmount).toBe(24.5);
+  });
+  it('Login, Reconciliation (totaux depuis le dernier rapprochement), Logout', async () => {
+    h = await harness();
+    const t = engineTarget(h.engine);
+    const login = await handleNexo({ SaleToPOIRequest: { MessageHeader: hdr(h.posId, 'Login'), LoginRequest: { DateTime: new Date().toISOString() } } }, t);
+    expect(login.SaleToPOIResponse.LoginResponse.Response.Result).toBe('Success');
+    for (const [id, amt] of [['R-1', 10], ['R-2', 15.5]] as const) {
+      await handleNexo({ SaleToPOIRequest: { MessageHeader: hdr(h.posId, 'Payment'), PaymentRequest: { SaleData: { SaleTransactionID: { TransactionID: id } }, PaymentTransaction: { AmountsReq: { Currency: 'EUR', RequestedAmount: amt } } } } }, t);
+    }
+    const rec = () => handleNexo({ SaleToPOIRequest: { MessageHeader: hdr(h!.posId, 'Reconciliation'), ReconciliationRequest: { ReconciliationType: 'SaleReconciliation' } } }, t);
+    const r1 = await rec();
+    expect(r1.SaleToPOIResponse.ReconciliationResponse.TransactionTotals[0].PaymentTotals[0]).toMatchObject({ TransactionCount: 2, TransactionAmount: 25.5 });
+    expect((await rec()).SaleToPOIResponse.ReconciliationResponse.TransactionTotals).toEqual([]);
+    const out = await handleNexo({ SaleToPOIRequest: { MessageHeader: hdr(h.posId, 'Logout'), LogoutRequest: {} } }, t);
+    expect(out.SaleToPOIResponse.LogoutResponse.Response.Result).toBe('Success');
+  });
+  it('forme XML : la requête nexo XML donne la même réponse, rendue en XML', async () => {
+    h = await harness();
+    const xml = `<?xml version="1.0"?><SaleToPOIRequest><MessageHeader ProtocolVersion="3.1" MessageClass="Service" MessageCategory="Payment" MessageType="Request" ServiceID="S9" SaleID="CAISSE-1" POIID="${h.posId}"/><PaymentRequest><SaleData><SaleTransactionID TransactionID="0042" TimeStamp="2026-11-22T10:00:00Z"/></SaleData><PaymentTransaction><AmountsReq Currency="EUR" RequestedAmount="12.30"/></PaymentTransaction></PaymentRequest></SaleToPOIRequest>`;
+    const res = await handleNexo(nexoFromXml(xml), engineTarget(h.engine));
+    expect(res.SaleToPOIResponse.PaymentResponse.Response.Result).toBe('Success');
+    expect(res.SaleToPOIResponse.PaymentResponse.POIData.POITransactionID.TransactionID).toBe('0042'); // reste une chaîne
+    const out = nexoToXml(res);
+    expect(out).toMatch(/^<\?xml/);
+    expect(out).toContain('<Response Result="Success"');
+    expect(out).toContain('AuthorizedAmount="12.3"');
+    expect(h.sims.debits()).toBe(1);
   });
   it('refus → Result Failure, ErrorCondition Refusal', async () => {
     h = await harness();

@@ -1,7 +1,7 @@
 // Passerelle Concert / Caisse-AP sur IP (France) : Meridian se présente comme un TPE sur le port 8888.
 // Format : messages ASCII TLV « TT LLL valeur », CZ en premier. Tags utilisés :
 //   requête  CZ version · CJ identifiant protocole · CA n° de caisse · CB montant (unités mineures)
-//            CD 0 = débit, 1 = remboursement, 2 = annulation · CE devise ISO numérique · BA 1 = réponse immédiate
+//            CD 0 = débit, 1 = remboursement, 2 = annulation de la dernière opération de ce montant · CE devise ISO numérique · BA 1 = réponse immédiate
 //   réponse  AE 10 = fait, 01 = non fait, 11 = pris en compte · AF motif (04 refus, 08 délai, 11 abandon, 05 interdit, 09 format)
 //            AC n° d'autorisation · AA numéro masqué · CC mode de paiement
 // Limite du protocole : aucune référence de transaction ni idempotence côté caisse.
@@ -52,6 +52,14 @@ export async function handleConcert(req: Record<string, string>, target: BridgeT
       const original = target.lastRefundable(posId, amount);
       if (!original) return fail('05');
       await target.refund(posId, original.reference, amount);
+      return { ...answer, AE: '10' };
+    }
+    if (req.CD === '2') {
+      // Annulation : la dernière opération autorisée de ce montant sur cette caisse, en cours ou terminée.
+      const original = target.lastCancellable(posId, amount);
+      if (!original) return fail('05');
+      if (original.state === 'pending' || original.state === 'created') await target.cancel(posId, original.reference);
+      else await target.refund(posId, original.reference, original.amount - original.refunded);
       return { ...answer, AE: '10' };
     }
     if (req.CD !== '0') return fail('05');

@@ -11,6 +11,10 @@ export interface BridgeTarget {
   receipt(posId: string, reference: string): { brand?: string; last4?: string; proof: { seq: number } } | undefined;
   /** Dernier paiement autorisé remboursable de ce montant (Concert et ZVT ne portent pas de référence d'origine). */
   lastRefundable(posId: string, amount: number): PaymentView | undefined;
+  /** Dernière opération de ce montant encore annulable (en cours, ou autorisée sans remboursement complet). */
+  lastCancellable(posId: string, amount: number): PaymentView | undefined;
+  /** Paiements du point de vente (clôture de journée, rapprochement). */
+  list(posId: string): PaymentView[];
 }
 
 export function engineTarget(engine: Engine): BridgeTarget {
@@ -28,6 +32,9 @@ export function engineTarget(engine: Engine): BridgeTarget {
       }
     },
     lastRefundable: (posId, amount) => engine.list(posId).find((p) => p.state === 'authorized' && p.amount - p.refunded >= amount),
+    lastCancellable: (posId, amount) => engine.list(posId).find((p) => p.amount === amount
+      && (p.state === 'pending' || p.state === 'created' || (p.state === 'authorized' && p.refunded < p.amount))),
+    list: (posId) => engine.list(posId),
   };
 }
 

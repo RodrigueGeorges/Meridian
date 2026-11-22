@@ -12,7 +12,7 @@ import { z, ZodError } from 'zod';
 import { COUNTRIES, isCurrency, MeridianError, type Currency } from '@meridian/core';
 import { Engine, Journal, JsonlStore, MemoryStore, type JournalStore, type PaymentView } from '@meridian/engine';
 import { BUILTIN_MODULES, ModuleRuntime } from '@meridian/modules';
-import { createConcertServer, createZvtServer, engineTarget, handleNexo } from '@meridian/bridges';
+import { createConcertServer, createZvtServer, engineTarget, handleNexo, nexoFromXml, nexoToXml } from '@meridian/bridges';
 import type { Server as NetServer } from 'node:net';
 import { MemoryPosRepo, PgCluster, PgJournalStore, PgPosRepo, SecretBox, migrate, pg, type PosRepo } from '@meridian/store-pg';
 
@@ -202,7 +202,10 @@ export async function buildServer(o: ServerOptions) {
     const h = req.headers.authorization ?? '';
     const m = h.match(/^Bearer (mk_(test|live)_[A-Za-z0-9]+)$/);
     const org = m ? await keys.find(sha(m[1]!)) : undefined;
-    if (!org) throw new MeridianError('unauthorized', 'Clé API Meridian invalide', 401);
+    if (!org) {
+      void audit(req, undefined, 'auth.failed', req.url.split('?')[0]);
+      throw new MeridianError('unauthorized', 'Clé API Meridian invalide', 401);
+    }
     return org;
   };
   const ownPos = async (org: Org, posId: string) => {
@@ -230,6 +233,18 @@ export async function buildServer(o: ServerOptions) {
     memHits.set(id, [...recent, now]);
     return true;
   };
+  // ---------- Journal d'audit des actions d'administration (PCI DSS 10) ----------
+  type AuditEntry = { at: string; orgId: string | null; action: string; target: string | null; keyPrefix: string | null; ipHash: string; detail: Record<string, unknown> };
+  const memAudit: AuditEntry[] = [];
+  const audit = async (req: FastifyRequest, org: Org | undefined, action: string, target?: string, detail: Record<string, unknown> = {}) => {
+    const key = (req.headers.authorization ?? '').match(/^Bearer (mk_(?:test|live)_)/)?.[1] ?? null;
+    const e: AuditEntry = { at: new Date().toISOString(), orgId: org?.id ?? null, action, target: target ?? null, keyPrefix: key, ipHash: ipKey(req.ip).slice(0, 16), detail };
+    try {
+      if (pool) await pool.query('INSERT INTO audit_log (org_id, action, target, key_prefix, ip_hash, detail) VALUES ($1,$2,$3,$4,$5,$6)', [e.orgId, e.action, e.target, e.keyPrefix, e.ipHash, e.detail]);
+      else { memAudit.push(e); if (memAudit.length > 10_000) memAudit.shift(); }
+    } catch (err) { app.log.error({ err }, 'audit'); }
+  };
+
   // Purge RGPD : traces de limite de débit après 24 h, demandes de contact après la durée de conservation.
   const retentionDays = o.contactRetentionDays ?? 1095;
   const purge = async () => {
@@ -347,14 +362,18 @@ export async function buildServer(o: ServerOptions) {
     const org = await auth(req);
     const { posId } = PosQuery.parse(req.body);
     await ownPos(org, posId);
-    return engine.cancel(posId, (req.params as { reference: string }).reference);
+    const reference = (req.params as { reference: string }).reference;
+    await audit(req, org, 'payment.cancel_requested', reference, { posId });
+    return engine.cancel(posId, reference);
   });
   const RefundBody = z.object({ posId: z.string(), amount: z.number().int().positive(), refundNumber: z.number().int().positive().optional() });
   app.post('/v1/payments/:reference/refunds', async (req) => {
     const org = await auth(req);
     const b = RefundBody.parse(req.body);
     await ownPos(org, b.posId);
-    return engine.refund(b.posId, (req.params as { reference: string }).reference, b.amount, b.refundNumber);
+    const reference = (req.params as { reference: string }).reference;
+    await audit(req, org, 'payment.refund_requested', reference, { posId: b.posId, amount: b.amount });
+    return engine.refund(b.posId, reference, b.amount, b.refundNumber);
   });
   app.get('/v1/payments/:reference/receipt', async (req) => {
     const org = await auth(req);
@@ -391,12 +410,22 @@ export async function buildServer(o: ServerOptions) {
       id: b.id ?? `pos_${randomBytes(8).toString('hex')}`, orgId: org.id, label: b.label, country: b.country,
       currency: currency as Currency, locale: b.locale ?? prof.locales[0]!, timezone: prof.timezone,
     });
+    await audit(req, org, 'pos.created', pos.id, { country: pos.country, currency: pos.currency });
     return reply.code(201).send(pos);
+  });
+  app.get('/v1/audit', async (req) => {
+    const org = await auth(req);
+    const { limit } = z.object({ limit: z.coerce.number().int().min(1).max(500).default(100) }).parse(req.query);
+    if (pool) {
+      const r = await pool.query('SELECT at, action, target, key_prefix, ip_hash, detail FROM audit_log WHERE org_id=$1 ORDER BY id DESC LIMIT $2', [org.id, limit]);
+      return r.rows.map((x) => ({ at: x.at, action: x.action, target: x.target, keyPrefix: x.key_prefix, ipHash: x.ip_hash, detail: x.detail }));
+    }
+    return memAudit.filter((e) => e.orgId === org.id).slice(-limit).reverse().map(({ orgId: _o, ...e }) => e);
   });
   app.get('/v1/pos', async (req) => repo.list((await auth(req)).id));
   app.get('/v1/pos/:id', async (req) => ownPos(await auth(req), (req.params as { id: string }).id));
 
-  const Binding = z.object({ moduleId: z.string(), config: z.record(z.unknown()), baseUrl: z.string().url().optional() });
+  const Binding = z.object({ moduleId: z.string(), config: z.record(z.string(), z.unknown()), baseUrl: z.string().url().optional() });
   app.put('/v1/pos/:id/routing', async (req) => {
     const org = await auth(req);
     const pos = await ownPos(org, (req.params as { id: string }).id);
@@ -410,6 +439,8 @@ export async function buildServer(o: ServerOptions) {
       new ModuleRuntime(def, bind.config); // valide les paramètres obligatoires
     }
     await repo.setRouting(pos.id, b.primary, b.fallback);
+    // Jamais la configuration (identifiants PSP) : seulement les modules choisis.
+    await audit(req, org, 'pos.routing_changed', pos.id, { primary: b.primary.moduleId, fallback: b.fallback?.moduleId ?? null });
     return { posId: pos.id, primary: b.primary.moduleId, fallback: b.fallback?.moduleId ?? null };
   });
   app.post('/v1/pos/:id/health', async (req) => {
@@ -430,11 +461,18 @@ export async function buildServer(o: ServerOptions) {
 
   // ---------- Passerelles de compatibilité ----------
   const target = engineTarget(engine);
-  app.post('/v1/nexo', async (req) => {
+  // nexo Retailer : JSON ou XML (application/xml, text/xml), réponse dans le même format que la requête.
+  app.addContentTypeParser(['application/xml', 'text/xml'], { parseAs: 'string', bodyLimit: 256 * 1024 }, (_req, body, done) => done(null, body));
+  app.post('/v1/nexo', async (req, reply) => {
     const org = await auth(req);
-    const poi = (req.body as { SaleToPOIRequest?: { MessageHeader?: { POIID?: string } } })?.SaleToPOIRequest?.MessageHeader?.POIID;
+    const xml = typeof req.body === 'string';
+    let body: Record<string, unknown>;
+    try { body = xml ? nexoFromXml(req.body as string) : (req.body as Record<string, unknown>); }
+    catch { throw new MeridianError('invalid_request', 'XML nexo illisible', 400); }
+    const poi = (body as { SaleToPOIRequest?: { MessageHeader?: { POIID?: string } } })?.SaleToPOIRequest?.MessageHeader?.POIID;
     if (poi) await ownPos(org, poi);
-    return handleNexo(req.body as Record<string, unknown>, target);
+    const res = await handleNexo(body, target);
+    return xml ? reply.type('application/xml; charset=utf-8').send(nexoToXml(res)) : res;
   });
   const netServers: NetServer[] = [];
   const bridgeHost = o.bridges?.host ?? '127.0.0.1';
@@ -464,9 +502,9 @@ export async function buildServer(o: ServerOptions) {
     root: portalDir, prefix: '/portal/', cacheControl: false, index: false,
     allowedPath: (path) => /^\/(console\.html|app\.js|styles\.css|fonts\.css|fonts\/.+|i18n\/(?!site\/).+)$/.test(path),
     setHeaders: (res, path) => {
-      if (path.endsWith('.html')) { res.setHeader('Cache-Control', 'no-cache'); res.setHeader('X-Robots-Tag', 'noindex'); }
-      else if (path.includes('/fonts/')) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-      else res.setHeader('Cache-Control', 'public, max-age=600, stale-while-revalidate=86400');
+      if (path.endsWith('.html')) { res.header('Cache-Control', 'no-cache'); res.header('X-Robots-Tag', 'noindex'); }
+      else if (path.includes('/fonts/')) res.header('Cache-Control', 'public, max-age=31536000, immutable');
+      else res.header('Cache-Control', 'public, max-age=600, stale-while-revalidate=86400');
     },
   });
   app.get('/', async (req, reply) => reply.header('Vary', 'Accept-Language').header('Cache-Control', 'no-cache')

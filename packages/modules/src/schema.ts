@@ -4,7 +4,7 @@ import { PAYMENT_METHODS } from '@meridian/core';
 const Call = z.object({
   method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']),
   path: z.string().startsWith('/'),
-  body: z.record(z.unknown()).optional(),
+  body: z.record(z.string(), z.unknown()).optional(),
 });
 const Condition = z.object({
   path: z.string(),
@@ -15,7 +15,7 @@ const Condition = z.object({
 });
 const Step = Call.extend({
   id: z.string().regex(/^[a-z0-9_]+$/),
-  save: z.record(z.string()).optional(),
+  save: z.record(z.string(), z.string()).optional(),
   retryErrors: z.array(z.string()).optional(),
 });
 
@@ -31,21 +31,21 @@ export const ModuleSchema = z
     encoding: z.enum(['json', 'form']).default('json'),
     errorCodePath: z.string().default('error.code'),
     idempotency: z.object({ header: z.string() }).optional(),
-    lookup: Call.extend({ pick: z.record(z.string()) }).optional(),
+    lookup: Call.extend({ pick: z.record(z.string(), z.string()) }).optional(),
     pay: z.object({ steps: z.array(Step).min(1) }),
     status: z.object({
-      sources: z.record(Call),
+      sources: z.record(z.string(), Call),
       rules: z.array(z.object({ when: z.array(Condition).min(1), state: z.enum(['authorized', 'declined', 'cancelled', 'failed']), detailPath: z.string().optional() })),
     }),
     cancel: Call.extend({ busyCodes: z.array(z.string()).default([]) }),
     cleanup: Call.optional(),
     refund: Call,
     health: Call.optional(),
-    receipt: z.record(z.string()).optional(),
+    receipt: z.record(z.string(), z.string()).optional(),
     capabilities: z.object({
       countries: z.array(z.string().length(2)).min(1),
       currencies: z.array(z.string().length(3)).min(1),
-      paymentMethods: z.record(z.array(z.enum(PAYMENT_METHODS))),
+      paymentMethods: z.record(z.string(), z.array(z.enum(PAYMENT_METHODS))),
       partialRefund: z.boolean().default(true),
       cancelDuringAuth: z.boolean().default(false),
       languages: z.array(z.string()).default([]),

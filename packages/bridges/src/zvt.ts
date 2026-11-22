@@ -1,7 +1,8 @@
 // Passerelle ZVT (Allemagne, Autriche, Suisse) sur TCP/IP : Meridian se présente comme un terminal ZVT.
 // Trames APDU : CLASS INSTR LEN [DATA] (LEN = 0xFF + 2 octets little-endian au-delà de 254).
-// Pris en charge : 06 00 Registration · 06 01 Authorization (BMP 04 montant BCD 6 octets, BMP 49 devise)
-//                  06 30 Reversal (BMP 87 n° de reçu) · 06 B0 Abort.
+// Pris en charge : 06 00 Registration · 06 02 Log-Off · 06 01 Authorization (BMP 04 montant BCD 6 octets, BMP 49 devise)
+//                  06 30 Reversal (BMP 87 n° de reçu) · 06 31 Refund (BMP 04 montant) · 06 B0 Abort
+//                  06 50 End-of-Day (BMP 04 total du jour) · 05 01 Status Enquiry · 06 70 Diagnosis.
 // Réponses : 80 00 00 (ACK) · 04 0F Status-Information (27 code résultat, 04 montant, 87 n° de reçu) · 06 0F Completion
 //            06 1E Abort (code d'erreur : 6C abandon, FF autre/refus — à valider sur terminal réel avec la spec VDT).
 import net from 'node:net';
@@ -56,6 +57,7 @@ export interface ZvtOptions { posId: string; currency?: string; timeoutMs?: numb
 export function createZvtServer(target: BridgeTarget, o: ZvtOptions): net.Server {
   const receipts = new Map<number, string>(); // n° de reçu → référence Meridian
   let receiptNo = 0;
+  let day: string[] = []; // références autorisées par ce terminal depuis la dernière clôture
   return net.createServer((sock) => {
     let buf = Buffer.alloc(0);
     let current: string | undefined;
@@ -69,6 +71,32 @@ export function createZvtServer(target: BridgeTarget, o: ZvtOptions): net.Server
         if (m.cls === 0x80 && m.ins === 0x00) continue; // ACK de la caisse
         const cmd = (m.cls << 8) | m.ins;
         if (cmd === 0x0600) { send(ACK); send(COMPLETION); continue; }
+        if (cmd === 0x0602 || cmd === 0x0501 || cmd === 0x0670) { send(ACK); send(COMPLETION); continue; }
+        if (cmd === 0x0650) {
+          // Clôture de journée : total net des paiements autorisés depuis la dernière clôture.
+          send(ACK);
+          const total = day.map((ref) => target.status(o.posId, ref))
+            .filter((v) => v.state === 'authorized')
+            .reduce((n, v) => n + v.amount - v.refunded, 0);
+          day = [];
+          send(apdu(0x04, 0x0f, [0x27, 0x00, 0x04, ...toBcd(total, 6)]));
+          send(COMPLETION);
+          continue;
+        }
+        if (cmd === 0x0631) {
+          const p = parseBmps(m.data);
+          send(ACK);
+          try {
+            const original = p.amount ? target.lastRefundable(o.posId, p.amount) : undefined;
+            if (!original || !p.amount) throw new Error('nothing to refund');
+            await target.refund(o.posId, original.reference, p.amount);
+            send(apdu(0x04, 0x0f, [0x27, 0x00, 0x04, ...toBcd(p.amount, 6)]));
+            send(COMPLETION);
+          } catch {
+            send(apdu(0x06, 0x1e, [0xb4]));
+          }
+          continue;
+        }
         if (cmd === 0x06b0) { send(ACK); if (current) void target.cancel(o.posId, current).catch(() => undefined); continue; }
         if (cmd === 0x0601) {
           const p = parseBmps(m.data);
@@ -83,6 +111,7 @@ export function createZvtServer(target: BridgeTarget, o: ZvtOptions): net.Server
             if (v.state === 'authorized') {
               receiptNo = (receiptNo % 9999) + 1;
               receipts.set(receiptNo, reference);
+              day.push(reference);
               send(apdu(0x04, 0x0f, [0x27, 0x00, 0x04, ...toBcd(p.amount, 6), 0x87, ...toBcd(receiptNo, 2)]));
               send(COMPLETION);
             } else {

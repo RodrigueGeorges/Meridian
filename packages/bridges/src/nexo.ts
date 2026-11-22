@@ -1,7 +1,8 @@
-// Passerelle nexo Retailer (ISO 20022), forme JSON (SaleToPOIRequest / SaleToPOIResponse) sur HTTP.
-// MessageCategory pris en charge : Payment, Reversal, TransactionStatus, Abort.
+// Passerelle nexo Retailer (ISO 20022), formes JSON et XML (SaleToPOIRequest / SaleToPOIResponse) sur HTTP.
+// MessageCategory pris en charge : Login, Logout, Payment, Reversal, TransactionStatus, Abort, Reconciliation.
 // POIID = point de vente Meridian ; SaleTransactionID.TransactionID = référence (idempotente).
 import { CURRENCIES, type Currency } from '@meridian/core';
+import { XMLBuilder, XMLParser } from 'fast-xml-parser';
 import type { BridgeTarget } from './target.ts';
 
 type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -9,6 +10,8 @@ type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-ex
 const header = (h: Json, category: string) => ({ ...h, MessageCategory: category, MessageType: 'Response' });
 const toMinor = (amount: number, currency: string) => Math.round(amount * 10 ** (CURRENCIES[currency as Currency] ?? 2));
 const toMajor = (amount: number, currency: string) => amount / 10 ** (CURRENCIES[currency as Currency] ?? 2);
+const num = (v: unknown) => (typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? Number(v) : undefined);
+const reconciled = new Map<string, Set<string>>(); // POIID → références déjà rapprochées
 const failure = (condition: string, text: string) => ({ Result: 'Failure', ErrorCondition: condition, AdditionalResponse: text });
 
 export async function handleNexo(body: Json, target: BridgeTarget, opts: { timeoutMs?: number } = {}): Promise<Json> {
@@ -18,12 +21,52 @@ export async function handleNexo(body: Json, target: BridgeTarget, opts: { timeo
   const category: string = h.MessageCategory;
   if (!req || !posId || !category) return { SaleToPOIResponse: { MessageHeader: header(h, category ?? 'Unknown'), Response: failure('MessageFormat', 'MessageHeader incomplet') } };
 
+  if (category === 'Login') {
+    return {
+      SaleToPOIResponse: {
+        MessageHeader: header(h, category),
+        LoginResponse: {
+          Response: { Result: 'Success' },
+          POISystemData: {
+            DateTime: new Date().toISOString(),
+            POISoftware: { ProviderIdentification: 'Meridian', ApplicationName: 'Meridian nexo Retailer', SoftwareVersion: '0.1.0' },
+            POIStatus: { GlobalStatus: 'OK' },
+          },
+        },
+      },
+    };
+  }
+  if (category === 'Logout') return { SaleToPOIResponse: { MessageHeader: header(h, category), LogoutResponse: { Response: { Result: 'Success' } } } };
+
+  if (category === 'Reconciliation') {
+    // Rapprochement : paiements autorisés depuis le précédent rapprochement de ce point de vente.
+    const type: string = req.ReconciliationRequest?.ReconciliationType ?? 'SaleReconciliation';
+    const done = reconciled.get(posId) ?? new Set<string>();
+    const fresh = target.list(posId).filter((v) => v.state === 'authorized' && !done.has(v.reference));
+    const byCur = new Map<string, { n: number; amount: number }>();
+    for (const v of fresh) {
+      const t = byCur.get(v.currency) ?? { n: 0, amount: 0 };
+      byCur.set(v.currency, { n: t.n + 1, amount: t.amount + v.amount - v.refunded });
+      done.add(v.reference);
+    }
+    reconciled.set(posId, done);
+    return {
+      SaleToPOIResponse: {
+        MessageHeader: header(h, category),
+        ReconciliationResponse: {
+          Response: { Result: 'Success' }, ReconciliationType: type,
+          TransactionTotals: [...byCur].map(([cur, t]) => ({ PaymentInstrumentType: 'Card', PaymentCurrency: cur, PaymentTotals: [{ TransactionType: 'Debit', TransactionCount: t.n, TransactionAmount: toMajor(t.amount, cur) }] })),
+        },
+      },
+    };
+  }
+
   if (category === 'Payment') {
     const p = req.PaymentRequest;
     const reference: string = p?.SaleData?.SaleTransactionID?.TransactionID;
     const cur: string = p?.PaymentTransaction?.AmountsReq?.Currency;
-    const amt: number = p?.PaymentTransaction?.AmountsReq?.RequestedAmount;
-    if (!reference || !cur || typeof amt !== 'number') return { SaleToPOIResponse: { MessageHeader: header(h, category), PaymentResponse: { Response: failure('MessageFormat', 'TransactionID, Currency et RequestedAmount obligatoires') } } };
+    const amt = num(p?.PaymentTransaction?.AmountsReq?.RequestedAmount);
+    if (!reference || !cur || amt === undefined || Number.isNaN(amt)) return { SaleToPOIResponse: { MessageHeader: header(h, category), PaymentResponse: { Response: failure('MessageFormat', 'TransactionID, Currency et RequestedAmount obligatoires') } } };
     try {
       await target.pay(posId, reference, toMinor(amt, cur), cur);
       const v = await target.waitFinal(posId, reference, opts.timeoutMs ?? 120_000);
@@ -52,7 +95,7 @@ export async function handleNexo(body: Json, target: BridgeTarget, opts: { timeo
     const reference: string = r?.OriginalPOITransaction?.POITransactionID?.TransactionID;
     try {
       const status = target.status(posId, reference);
-      const amount = r?.ReversedAmount !== undefined ? toMinor(r.ReversedAmount, status.currency) : status.amount - status.refunded;
+      const amount = r?.ReversedAmount !== undefined ? toMinor(num(r.ReversedAmount) ?? 0, status.currency) : status.amount - status.refunded;
       await target.refund(posId, reference, amount);
       return { SaleToPOIResponse: { MessageHeader: header(h, category), ReversalResponse: { Response: { Result: 'Success' }, ReversedAmount: toMajor(amount, status.currency) } } };
     } catch (e) {
@@ -79,4 +122,31 @@ export async function handleNexo(body: Json, target: BridgeTarget, opts: { timeo
   }
 
   return { SaleToPOIResponse: { MessageHeader: header(h, category), Response: failure('NotAllowed', `Catégorie non prise en charge : ${category}`) } };
+}
+
+// ---------- Forme XML ----------
+// En XML nexo, les valeurs simples sont des attributs et les blocs des éléments ; la forme JSON reprend les mêmes noms.
+const xmlParser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '', parseAttributeValue: false, parseTagValue: false, isArray: (name) => ['TransactionTotals', 'PaymentTotals'].includes(name) });
+const xmlBuilder = new XMLBuilder({ ignoreAttributes: false, attributeNamePrefix: '@_', suppressEmptyNode: true, format: false });
+
+export function nexoFromXml(xml: string): Json {
+  return xmlParser.parse(xml) as Json;
+}
+
+function toXmlTree(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(toXmlTree);
+  if (v && typeof v === 'object') {
+    const out: Json = {};
+    for (const [k, x] of Object.entries(v as Json)) {
+      if (x === undefined || x === null) continue;
+      if (typeof x === 'object') out[k] = toXmlTree(x);
+      else out[`@_${k}`] = String(x);
+    }
+    return out;
+  }
+  return v;
+}
+
+export function nexoToXml(body: Json): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>${xmlBuilder.build(toXmlTree(body))}`;
 }

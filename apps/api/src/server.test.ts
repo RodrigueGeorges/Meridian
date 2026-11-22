@@ -113,6 +113,33 @@ for (const mode of ['memory', 'postgres'] as const) {
       await expect(m.pay({ reference: `EUR-${Date.now()}`, amount: 100, currency: 'EUR' })).rejects.toBeInstanceOf(MeridianApiError);
     });
 
+    it('journal d\'audit : actions d\'administration tracées, sans aucun secret ; échec d\'authentification tracé', async () => {
+      const h = { authorization: `Bearer ${KEY}`, 'content-type': 'application/json' };
+      const pos = await (await fetch(`${base}/v1/pos`, { method: 'POST', headers: h, body: JSON.stringify({ label: 'Audit', country: 'FR' }) })).json();
+      await fetch(`${base}/v1/pos/${pos.id}/routing`, { method: 'PUT', headers: h, body: JSON.stringify({ primary: { moduleId: 'psp-secours', config: { apiKey: 'secret-ne-doit-pas-apparaitre' }, baseUrl: sims.secoursUrl } }) });
+      await fetch(`${base}/v1/pos`, { headers: { authorization: 'Bearer mk_test_inconnue000' } });
+      const log = await (await fetch(`${base}/v1/audit?limit=50`, { headers: h })).json();
+      const mine = log.filter((e: { target: string }) => e.target === pos.id).map((e: { action: string }) => e.action);
+      expect(mine).toEqual(expect.arrayContaining(['pos.created', 'pos.routing_changed']));
+      expect(JSON.stringify(log)).not.toContain('secret-ne-doit-pas-apparaitre');
+      expect(log.find((e: { action: string }) => e.action === 'pos.routing_changed').detail).toEqual({ primary: 'psp-secours', fallback: null });
+      if (mode === 'postgres') {
+        const p = new pg.Pool({ connectionString: dbUrl });
+        expect((await p.query("SELECT count(*)::int AS n FROM audit_log WHERE action='auth.failed'")).rows[0].n).toBeGreaterThan(0);
+        await expect(p.query('DELETE FROM audit_log')).rejects.toThrow(/append-only/);
+        await p.end();
+      }
+    });
+
+    it('nexo Retailer en XML par l\'API : réponse XML', async () => {
+      const xml = `<SaleToPOIRequest><MessageHeader ProtocolVersion="3.1" MessageClass="Service" MessageCategory="Payment" MessageType="Request" ServiceID="X1" SaleID="C1" POIID="pos_demo_FR"/><PaymentRequest><SaleData><SaleTransactionID TransactionID="XML-${Date.now()}"/></SaleData><PaymentTransaction><AmountsReq Currency="EUR" RequestedAmount="7.50"/></PaymentTransaction></PaymentRequest></SaleToPOIRequest>`;
+      const r = await fetch(`${base}/v1/nexo`, { method: 'POST', headers: { authorization: `Bearer ${KEY}`, 'content-type': 'application/xml' }, body: xml });
+      expect(r.headers.get('content-type')).toContain('application/xml');
+      const out = await r.text();
+      expect(out).toContain('<Response Result="Success"');
+      expect(out).toContain('AuthorizedAmount="7.5"');
+    });
+
     it('journal intact et, sur PostgreSQL, non modifiable', async () => {
       const v = await (await fetch(`${base}/v1/journal/verify`, { headers: { authorization: `Bearer ${KEY}` } })).json();
       expect(v.ok).toBe(true);

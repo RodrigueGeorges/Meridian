@@ -1,5 +1,6 @@
 <section><h2>The protocol</h2><p>nexo Retailer is an international standard for messages between till and terminal (SaleToPOIRequest and SaleToPOIResponse), used across Europe.</p></section>
-<section><h2>What Meridian does</h2><p>Meridian accepts nexo Retailer messages in JSON on <code>POST /v1/nexo</code>: payment, reversal, transaction status and abort. The POIID field identifies the Meridian point of sale.</p>
+<section><h2>What Meridian does</h2><p>Meridian accepts nexo Retailer messages in JSON or XML on <code>POST /v1/nexo</code>. The POIID field identifies the Meridian point of sale.</p>
+<p>Supported messages, in JSON and XML: Login, Logout, Payment, Reversal, TransactionStatus, Abort, Reconciliation.</p>
 <ul><li>No change needed in the till software.</li><li>Every payment received by the bridge goes through the same engine: signed journal, idempotency, recovery, zero double charges.</li><li>The merchant can switch PSP without touching the till.</li></ul></section>
 <section><h2>Status</h2><p>Available in the API and in the demo.</p></section>
 <section><h2>Learn more</h2><p><a href="{{url:developers}}">Developer documentation</a> · <a href="{{url:contact}}">Talk about your integration</a></p></section>

@@ -1,5 +1,6 @@
 <section><h2>Le protocole</h2><p>nexo Retailer est un standard international de messages entre caisse et terminal (SaleToPOIRequest et SaleToPOIResponse), utilisé dans toute l’Europe.</p></section>
-<section><h2>Ce que Meridian fait</h2><p>Meridian accepte les messages nexo Retailer au format JSON sur <code>POST /v1/nexo</code> : paiement, annulation, consultation d’état et abandon. Le champ POIID désigne le point de vente Meridian.</p>
+<section><h2>Ce que Meridian fait</h2><p>Meridian accepte les messages nexo Retailer en JSON ou en XML sur <code>POST /v1/nexo</code>. Le champ POIID désigne le point de vente Meridian.</p>
+<p>Messages pris en charge, en JSON comme en XML : Login, Logout, Payment, Reversal, TransactionStatus, Abort, Reconciliation.</p>
 <ul><li>Aucune ligne à changer dans le logiciel de caisse.</li><li>Chaque paiement reçu par la passerelle passe par le même moteur : journal signé, idempotence, reprise, zéro double débit.</li><li>Le marchand peut changer de PSP sans toucher à la caisse.</li></ul></section>
 <section><h2>Statut</h2><p>Disponible dans l’API et en démonstration.</p></section>
 <section><h2>En savoir plus</h2><p><a href="{{url:developers}}">Documentation développeurs</a> · <a href="{{url:contact}}">Parler de votre intégration</a></p></section>

@@ -106,7 +106,7 @@
     ['NL', 'EUR', ['Wero'], ['nexo']],
     ['DE', 'EUR', ['girocard'], ['ZVT', 'nexo']],
     ['ES', 'EUR', ['Bizum'], ['nexo']],
-    ['IT', 'EUR', ['PagoBancomat'], ['ECR17', 'nexo']],
+    ['IT', 'EUR', ['PagoBancomat'], ['nexo']],
     ['AT', 'EUR', [], ['ZVT', 'nexo']],
     ['CH', 'CHF', ['TWINT'], ['ZVT', 'nexo']],
   ];

@@ -30,7 +30,7 @@ pnpm caisse 112.45 --panne      # idem avec une coupure réseau de 2,5 s en plei
 
 ## Tests
 
-64 tests (moteur, conformité, propriétés, API mémoire et PostgreSQL, passerelles, cluster). Les tests PostgreSQL et cluster tournent si `DATABASE_URL` est défini.
+72 tests (moteur, conformité, propriétés, API mémoire et PostgreSQL, passerelles, cluster). Les tests PostgreSQL et cluster tournent si `DATABASE_URL` est défini.
 
 ```bash
 pnpm typecheck
@@ -48,7 +48,7 @@ STRIPE_KEY=sk_test_… COUNTRY=DE pnpm sandbox   # sandbox Stripe réelle, par p
 | `packages/modules` | Interpréteur de modules JSON, schéma, catalogue (`catalog/*.json`) |
 | `packages/engine` | Moteur (5 appels), journal chaîné SHA-256 + HMAC, reprise, bascule |
 | `packages/store-pg` | PostgreSQL : journal append-only, points de vente, secrets chiffrés AES-256-GCM, migrations |
-| `packages/bridges` | Passerelles caisse : Concert/Caisse-AP (TCP 8888), ZVT (TCP 20007), nexo Retailer JSON (`POST /v1/nexo`) |
+| `packages/bridges` | Passerelles caisse : Concert/Caisse-AP (TCP 8888 : débit, remboursement, annulation), ZVT (TCP 20007 : Registration, Authorization, Reversal, Refund, Abort, End-of-Day, Log-Off, Status Enquiry, Diagnosis), nexo Retailer JSON et XML (`POST /v1/nexo` : Login, Logout, Payment, Reversal, TransactionStatus, Abort, Reconciliation) |
 | `packages/sdk-js` | SDK caisse : `pay`, `status`, `cancel`, `refund`, `receipt`, `waitForFinal` |
 | `apps/api` | API REST + worker intégré + portail statique |
 | `apps/sim` | Simulateurs PSP fidèles aux API, injection de pannes (`POST /__faults`) |
@@ -66,9 +66,14 @@ STRIPE_KEY=sk_test_… COUNTRY=DE pnpm sandbox   # sandbox Stripe réelle, par p
 Une caisse déjà intégrée en Concert (FR), ZVT (DE/AT/CH) ou nexo passe par Meridian sans changer une ligne :
 - **Concert** : `CONCERT_PORT=8888`, `CONCERT_POS_MAP=01=pos_demo_FR` (n° de caisse → point de vente).
 - **ZVT** : `ZVT_PORT=20007`, `ZVT_POS=pos_demo_DE` (un point de vente par port).
-- **nexo** : `POST /v1/nexo` avec un `SaleToPOIRequest` (Payment, Reversal, TransactionStatus, Abort) ; `POIID` = point de vente.
+- **nexo** : `POST /v1/nexo` avec un `SaleToPOIRequest` en JSON ou en XML (`content-type: application/xml`, réponse XML) : Login, Logout, Payment, Reversal, TransactionStatus, Abort, Reconciliation ; `POIID` = point de vente.
+- **Italie** : pas de passerelle ECR17 / Protocollo 17 à ce jour ; les caisses italiennes passent par nexo ou le SDK.
 
 Codes de réponse ZVT à confirmer avec la spécification VDT officielle avant certification.
+
+## Journal d'audit
+
+Les actions d'administration (création de point de vente, changement de PSP, annulation, remboursement, échec d'authentification) sont tracées dans `audit_log`, en ajout seul, sans aucun secret ni identifiant PSP. Lecture : `GET /v1/audit`.
 
 ## Multi-instance
 
