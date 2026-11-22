@@ -8,7 +8,7 @@ Connecteur de paiement universel pour caisses, bornes et kiosques. Un seul SDK c
 corepack enable && pnpm install
 cp .env.example .env
 pnpm sim            # simulateurs Stripe Terminal + PSP de secours (ports 12111, 12112)
-pnpm api            # API + portail sur http://localhost:8080/portal/
+pnpm api            # API + site sur http://localhost:8080/ (console : /portal/console.html)
 ```
 
 Sans `DATABASE_URL`, l'API tourne en mémoire. Avec Docker : `docker compose up --build` (PostgreSQL inclus).
@@ -22,7 +22,7 @@ curl -X POST localhost:8080/v1/payments -H "authorization: Bearer mk_test_demo01
 
 ## Tests
 
-54 tests (moteur, conformité, propriétés, API mémoire et PostgreSQL, passerelles, cluster). Les tests PostgreSQL et cluster tournent si `DATABASE_URL` est défini.
+64 tests (moteur, conformité, propriétés, API mémoire et PostgreSQL, passerelles, cluster). Les tests PostgreSQL et cluster tournent si `DATABASE_URL` est défini.
 
 ```bash
 pnpm typecheck
@@ -44,7 +44,7 @@ STRIPE_KEY=sk_test_… COUNTRY=DE pnpm sandbox   # sandbox Stripe réelle, par p
 | `packages/sdk-js` | SDK caisse : `pay`, `status`, `cancel`, `refund`, `receipt`, `waitForFinal` |
 | `apps/api` | API REST + worker intégré + portail statique |
 | `apps/sim` | Simulateurs PSP fidèles aux API, injection de pannes (`POST /__faults`) |
-| `apps/portal` | Site public en 6 langues (`/portal/` : accueil, éditeurs, PSP, démo « Essayez de le casser ») et console (`/portal/console.html`) ; polices auto-hébergées |
+| `apps/portal` | Site public : `build.ts` génère au démarrage 24 pages pré-rendues (4 pages × 6 langues, URL localisées, hreflang) et 20 pages FR/EN (`content/` : sécurité, développeurs, contact, protocoles, Stripe Terminal, accessibilité, mentions légales, confidentialité) ; gabarit `public/index.html` ; console `/portal/console.html` |
 | `conformance` | 8 scénarios de la spec + test de propriétés |
 | `tools/sandbox-check` | Test contre la sandbox Stripe réelle, par pays |
 | `infra`, `.github/workflows` | Docker, Fly.io (Paris), CI, sandbox nocturne, déploiement |

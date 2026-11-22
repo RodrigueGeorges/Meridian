@@ -1,0 +1,25 @@
+<p class="legal-lede">Meridian sits between the till and the PSP. Here is what we see, what we keep, and how you can check it.</p>
+<section><h2>What never goes through Meridian</h2>
+<ul><li><b>No full card number.</b> The card is read by the PSP’s terminal. Meridian only receives what the PSP returns on the receipt: the brand and the last four digits.</li>
+<li><b>No funds.</b> Money flows from the PSP to the merchant. Meridian is not a payment institution and holds no safeguarding account.</li>
+<li><b>No opaque automated decisions.</b> No AI model is involved in processing a payment.</li></ul></section>
+<section><h2>A payment is never lost or charged twice</h2>
+<ul><li>Each step is written to the journal <b>before</b> the PSP is called.</li>
+<li>Each step carries an idempotency key: a replayed call does not create a second charge.</li>
+<li>A network error yields “in progress”, never “failed”: Meridian queries the PSP for the real outcome.</li>
+<li>Failover to a backup PSP only happens when the connection is refused before anything is sent.</li>
+<li>If an instance goes down mid-payment, another one resumes the payment where it stopped.</li></ul>
+<p>These rules are checked on every release: 8 failure scenarios and 200 random failure sequences, where the only pass criterion is a single charge.</p></section>
+<section><h2>A journal you can prove</h2>
+<p>Each journal entry is chained to the previous one with a SHA-256 hash and signed with HMAC. In the database the journal is append-only: changing an existing entry is refused. Chain integrity can be checked at any time through the API (<code>GET /v1/journal/verify</code>).</p></section>
+<section><h2>Secrets and access</h2>
+<ul><li>Merchants’ PSP credentials are encrypted at rest (AES-256-GCM).</li>
+<li>API keys are only stored as hashes; test and live keys are separate.</li>
+<li>Webhooks are signed (HMAC-SHA256 with a timestamp) so you can verify where they come from.</li>
+<li>Traffic is encrypted (HTTPS, HSTS) and the site enforces a strict content security policy.</li></ul></section>
+<section><h2>Hosting</h2>
+<p>The application is hosted in the Paris region. [[Database: provider and region to confirm]].</p></section>
+<section><h2>What we don’t have yet</h2>
+<p>Meridian does not hold PCI DSS or ISO 27001 certification today. Because Meridian handles no full card number its PCI DSS scope is reduced; the exact level will be confirmed by a qualified assessor. We will list each certification on this page once obtained, never before.</p></section>
+<section><h2>Report a vulnerability</h2>
+<p>Write to [[security e-mail address]]. We acknowledge within 2 business days. Contact details are also published in <a href="/.well-known/security.txt">security.txt</a>.</p></section>

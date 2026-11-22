@@ -12,7 +12,7 @@
 <meta property="og:title" content="Meridian — Le connecteur universel entre les caisses et les PSP">
 <meta property="og:description" content="Connecteur de paiement neutre pour caisses et bornes en Europe : un SDK, tous les PSP, aucun double débit, une preuve pour chaque paiement.">
 <meta property="og:url" content="{{BASE}}/portal/">
-<meta property="og:image" content="{{BASE}}/portal/og.png">
+<meta property="og:image" content="{{BASE}}/portal/og-fr.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Meridian, le connecteur universel entre les caisses et les PSP">
@@ -33,7 +33,7 @@
       <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true"><circle cx="16" cy="16" r="12" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 4C8.5 9.5 8.5 22.5 16 28" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/><path d="M16 4C23.5 9.5 23.5 22.5 16 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" opacity=".25"/></svg>
       <span>Meridian</span>
     </a>
-    <nav class="nav" aria-label="Navigation">
+    <nav class="nav" aria-label="Navigation" data-i18n-aria="a11y.nav">
       <a href="#software" data-i18n="nav.software">Éditeurs</a>
       <a href="#psp" data-i18n="nav.psp">PSP</a>
       <a href="#demo" data-i18n="nav.demo">Démo</a>
@@ -76,7 +76,7 @@
       <div class="st-bar"><span class="st-logo"></span><b data-i18n="v5.store.title">Catalogue</b><span class="st-pos" data-i18n="v9.pos">Paris · Caisse 2</span><span class="st-timer" id="stTimer" aria-live="off"></span></div>
 
       <section class="pane pane-catalog">
-<div class="st-filters" role="group" aria-label="Pays"><button class="on" data-cc="" data-i18n="v7.all">Tous</button><button data-cc="FR">FR</button><button data-cc="DE">DE</button><button data-cc="BE">BE</button><button data-cc="NL">NL</button><button data-cc="CH">CH</button><button data-cc="ES">ES</button><button data-cc="IT">IT</button></div>
+<div class="st-filters" role="group" aria-label="Pays" data-i18n-aria="a11y.countries"><button class="on" data-cc="" data-i18n="v7.all">Tous</button><button data-cc="FR">FR</button><button data-cc="DE">DE</button><button data-cc="BE">BE</button><button data-cc="NL">NL</button><button data-cc="CH">CH</button><button data-cc="ES">ES</button><button data-cc="IT">IT</button></div>
       <ul class="st-apps">
         <li><span class="ic" style="--h:275">S</span><div data-cc="FR BE NL DE ES IT AT CH"><b>Stripe Terminal</b><small data-i18n="v6.st.stripe">Cartes, Bancontact, CB · Europe</small></div><button class="st-badge st-connect" type="button" data-pane-go="config" data-i18n="v9.connect1">Connecter</button></li>
         <li><span class="ic" style="--h:150">A</span><div data-cc="FR BE NL DE ES IT AT CH"><b>Adyen</b><small data-i18n="v6.st.adyen">Terminal API · Europe</small></div><span class="st-badge" data-i18n="v6.st.soon">Prévu</span></li>
@@ -89,7 +89,7 @@
       <div class="st-foot"><span id="stCount"></span></div>
       </section>
 
-      <section class="pane pane-config" aria-label="Configuration">
+      <section class="pane pane-config" aria-label="Configuration" data-i18n-aria="a11y.config">
         <button class="back" type="button" data-pane-go="catalog" data-i18n="v9.back">Catalogue</button>
         <div class="cfg-head"><span class="ic" style="--h:275">S</span><div><b>Stripe Terminal</b><small data-i18n="v6.st.stripe">Cartes, Bancontact, CB · Europe</small></div></div>
         <label><span data-i18n="v9.f1">Point de vente</span><input value="Paris · Caisse 2" readonly></label>
@@ -298,7 +298,7 @@
       <h2 data-i18n="sw.api.h">Cinq appels. Pas un de plus.</h2>
       <p data-i18n="sw.api.p">payer, état, annuler, rembourser, reçu. Le SDK gère les rejeux, les délais et les réponses perdues. Votre code ne connaît pas le PSP.</p>
     </div>
-    <pre class="code mono" tabindex="0" aria-label="Exemple de code"><code><span class="c">// npm i @meridian/sdk</span>
+    <pre class="code mono" tabindex="0" aria-label="Exemple de code" data-i18n-aria="a11y.code"><code><span class="c">// npm i @meridian/sdk</span>
 const m = new Meridian({ apiKey, posId });
 
 await m.pay({ reference: 'T-1042', amount: 2450, currency: 'EUR' });
@@ -349,7 +349,7 @@ const r = await m.receipt('T-1042');   <span class="c">// ticket + preuve</span>
       <h2 data-i18n="psp.mod.h">Un module déclaratif, pas un projet.</h2>
       <p data-i18n="psp.mod.p">Vous décrivez votre API dans un fichier : étapes, clés d'idempotence, lecture d'état, codes de refus. Aucun code dans le moteur. Le module est refusé s'il ne garantit pas l'idempotence.</p>
     </div>
-    <pre class="code mono" tabindex="0" aria-label="Exemple de module"><code>{
+    <pre class="code mono" tabindex="0" aria-label="Exemple de module" data-i18n-aria="a11y.module"><code>{
   "id": "votre-psp",
   "countries": ["FR", "BE", "DE"],
   "pay": [
@@ -407,7 +407,7 @@ const r = await m.receipt('T-1042');   <span class="c">// ticket + preuve</span>
 
 <dialog class="contact" id="contact" aria-labelledby="ctTitle">
   <form method="dialog" id="ctForm" novalidate>
-    <button class="ct-x" value="cancel" type="submit" aria-label="Fermer">×</button>
+    <button class="ct-x" value="cancel" type="submit" aria-label="Fermer" data-i18n-aria="a11y.close">×</button>
     <h2 id="ctTitle" data-i18n="ct.h">Parlons de votre intégration</h2>
     <p class="ct-sub" data-i18n="ct.p">Réponse sous 48 heures ouvrées.</p>
     <fieldset class="ct-role"><legend class="sr" data-i18n="ct.role">Vous êtes</legend>

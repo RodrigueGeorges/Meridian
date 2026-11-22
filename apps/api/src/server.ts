@@ -1,13 +1,13 @@
 // API publique Meridian : 5 appels de paiement, points de vente, catalogue. Le moteur tourne dans le même process
 // (worker intégré) et reprend les paiements inachevés au démarrage.
-import { createHash, createHmac, randomBytes } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fastifyCompress from '@fastify/compress';
 import fastifyHelmet from '@fastify/helmet';
 import fastifyStatic from '@fastify/static';
-import Fastify, { type FastifyRequest } from 'fastify';
+import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
+import { buildSite, pickLang, type Lang, type SiteFile } from '../../portal/build.ts';
 import { z, ZodError } from 'zod';
 import { COUNTRIES, isCurrency, MeridianError, type Currency } from '@meridian/core';
 import { Engine, Journal, JsonlStore, MemoryStore, type JournalStore, type PaymentView } from '@meridian/engine';
@@ -34,6 +34,10 @@ export interface ServerOptions {
   publicUrl?: string;
   /** Durée de conservation des demandes de contact, en jours (défaut 1095 = 3 ans). */
   contactRetentionDays?: number;
+  /** Contact de security.txt (ex. mailto:security@domaine). Défaut : security@ + domaine de PUBLIC_URL. */
+  securityContact?: string;
+  /** Jeton d'accès à GET /v1/metrics (statistiques d'audience). Sans jeton, la route n'existe pas. */
+  metricsToken?: string;
   /** Passerelles pour caisses existantes. À exposer uniquement sur le réseau local du magasin (agent local). */
   bridges?: { concertPort?: number; concertMap?: Record<string, string>; zvtPort?: number; zvtPosId?: string; host?: string };
 }
@@ -233,6 +237,7 @@ export async function buildServer(o: ServerOptions) {
     try {
       await pool.query("DELETE FROM rate_hits WHERE at < now() - interval '1 day'");
       await pool.query('DELETE FROM contact_requests WHERE created_at < now() - make_interval(days => $1::int)', [retentionDays]);
+      await pool.query("DELETE FROM site_stats WHERE day < current_date - interval '25 months'");
     } catch (e) { app.log.warn({ err: e }, 'purge'); }
   };
   void purge();
@@ -446,40 +451,98 @@ export async function buildServer(o: ServerOptions) {
   }
   const bridgePorts = () => netServers.map((s) => (s.address() as { port: number }).port);
 
-  // ---------- Portail ----------
+  // ---------- Site public (pages pré-rendues par langue) et console ----------
   const portalDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'portal', 'public');
+  const site = buildSite();
+  const base = (req: FastifyRequest) => (o.publicUrl ?? `${req.protocol}://${req.host}`).replace(/\/$/, '');
+  const sendFile = (req: FastifyRequest, reply: FastifyReply, f: SiteFile) => {
+    reply.type(f.type).header('Cache-Control', f.cache);
+    return reply.send(typeof f.body === 'string' && f.type.startsWith('text/html') ? f.body.replaceAll('{{BASE}}', base(req)) : f.body);
+  };
+  // Console (page d'administration) : servie telle quelle, non indexée.
   await app.register(fastifyStatic, {
     root: portalDir, prefix: '/portal/', cacheControl: false, index: false,
+    allowedPath: (path) => /^\/(console\.html|app\.js|styles\.css|fonts\.css|fonts\/.+|i18n\/(?!site\/).+)$/.test(path),
     setHeaders: (res, path) => {
-      // HTML toujours revalidé ; polices immuables ; le reste court + revalidation (empreintes de fichiers : semaine 2).
-      if (path.endsWith('.html')) res.setHeader('Cache-Control', 'no-cache');
+      if (path.endsWith('.html')) { res.setHeader('Cache-Control', 'no-cache'); res.setHeader('X-Robots-Tag', 'noindex'); }
       else if (path.includes('/fonts/')) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
       else res.setHeader('Cache-Control', 'public, max-age=600, stale-while-revalidate=86400');
     },
   });
-  app.get('/', async (_req, reply) => reply.redirect('/portal/'));
-  // Pages HTML publiques : l'URL absolue du site ({{BASE}}) est injectée pour canonical, hreflang et Open Graph.
-  const PAGES: Record<string, string> = {
-    '/portal/': 'index.html', '/portal/index.html': 'index.html',
-    '/portal/mentions-legales.html': 'mentions-legales.html', '/portal/legal-notice.html': 'legal-notice.html',
-    '/portal/confidentialite.html': 'confidentialite.html', '/portal/privacy.html': 'privacy.html',
-  };
-  for (const [route, file] of Object.entries(PAGES)) {
-    app.get(route, async (req, reply) => {
-      const html = (await readFile(join(portalDir, file), 'utf8')).replaceAll('{{BASE}}', base(req));
-      return reply.type('text/html; charset=utf-8').header('Cache-Control', 'no-cache').send(html);
-    });
-  }
-  const base = (req: FastifyRequest) => (o.publicUrl ?? `${req.protocol}://${req.host}`).replace(/\/$/, '');
+  app.get('/', async (req, reply) => reply.header('Vary', 'Accept-Language').header('Cache-Control', 'no-cache')
+    .redirect(`/${pickLang(req.headers['accept-language'])}/`, 302));
+  for (const [path, f] of site.files) app.get(path, async (req, reply) => sendFile(req, reply, f));
+  for (const [from, to] of site.redirects) if (!site.files.has(from)) app.get(from, async (_req, reply) => reply.redirect(to, 301));
   app.get('/robots.txt', async (req, reply) => reply.type('text/plain; charset=utf-8').header('Cache-Control', 'public, max-age=3600')
-    .send(`User-agent: *\nAllow: /portal/\nDisallow: /v1/\nDisallow: /portal/console.html\n\nSitemap: ${base(req)}/sitemap.xml\n`));
+    .send(`User-agent: *\nAllow: /\nDisallow: /v1/\nDisallow: /portal/\n\nSitemap: ${base(req)}/sitemap.xml\n`));
   app.get('/sitemap.xml', async (req, reply) => {
     const b = base(req);
-    const alt = (fr: string, en: string) => [fr, en].map((u) => `  <url><loc>${b}/portal/${u}</loc>`
-      + `<xhtml:link rel="alternate" hreflang="fr" href="${b}/portal/${fr}"/><xhtml:link rel="alternate" hreflang="en" href="${b}/portal/${en}"/></url>`).join('\n');
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n`
-      + `  <url><loc>${b}/portal/</loc></url>\n${alt('mentions-legales.html', 'legal-notice.html')}\n${alt('confidentialite.html', 'privacy.html')}\n</urlset>\n`;
-    return reply.type('application/xml; charset=utf-8').header('Cache-Control', 'public, max-age=3600').send(xml);
+    const urls = site.pages.map((p) => `  <url><loc>${b}${p.path}</loc>${Object.entries(p.alternates)
+      .map(([hl, u]) => `<xhtml:link rel="alternate" hreflang="${hl}" href="${b}${u}"/>`).join('')}</url>`).join('\n');
+    return reply.type('application/xml; charset=utf-8').header('Cache-Control', 'public, max-age=3600')
+      .send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n${urls}\n</urlset>\n`);
+  });
+  app.get('/.well-known/security.txt', async (req, reply) => {
+    const b = base(req);
+    const expires = new Date(Date.now() + 365 * 864e5).toISOString().slice(0, 10);
+    const contact = o.securityContact ?? `mailto:security@${new URL(b).hostname}`;
+    return reply.type('text/plain; charset=utf-8').header('Cache-Control', 'public, max-age=86400')
+      .send(`Contact: ${contact}\nExpires: ${expires}T00:00:00.000Z\nPreferred-Languages: fr, en\nCanonical: ${b}/.well-known/security.txt\nPolicy: ${b}/fr/securite/\n`);
+  });
+  // ---------- Mesure d'audience sans cookie ni identifiant (exemptée de consentement) ----------
+  // Compteurs agrégés par jour : page, action, langue, domaine de provenance. Purge après 25 mois.
+  const EVENTS = ['view', 'cta_software', 'cta_psp', 'demo', 'store_connect', 'contact'] as const;
+  const knownPaths = new Set(site.pages.map((pg) => pg.path));
+  const memStats = new Map<string, number>();
+  const Beacon = z.object({
+    e: z.enum(EVENTS), p: z.string().max(160),
+    l: z.enum(['fr', 'en', 'de', 'es', 'it', 'nl']).optional(),
+    r: z.string().max(100).regex(/^[a-z0-9.-]*$/i).optional(),
+  });
+  app.post('/v1/a', async (req, reply) => {
+    let raw: unknown = req.body;
+    if (typeof raw === 'string') { try { raw = JSON.parse(raw); } catch { return reply.code(204).send(); } }
+    const r = Beacon.safeParse(raw);
+    if (!r.success || !(await allow('audience', req.ip, 120, 60_000))) return reply.code(204).send();
+    const day = new Date().toISOString().slice(0, 10);
+    const row = [day, knownPaths.has(r.data.p) ? r.data.p : '(autre)', r.data.e, r.data.l ?? '', (r.data.r ?? '').toLowerCase()] as const;
+    if (pool) {
+      await pool.query(`INSERT INTO site_stats (day, path, event, lang, ref, n) VALUES ($1,$2,$3,$4,$5,1)
+        ON CONFLICT (day, path, event, lang, ref) DO UPDATE SET n = site_stats.n + 1`, [...row]);
+    } else memStats.set(row.join('|'), (memStats.get(row.join('|')) ?? 0) + 1);
+    return reply.code(204).send();
+  });
+  // Lecture des statistiques : réservée au détenteur de METRICS_TOKEN.
+  app.get('/v1/metrics', async (req, reply) => {
+    const token = o.metricsToken;
+    const given = (req.headers.authorization ?? '').replace(/^Bearer /, '');
+    if (!token || given.length !== token.length || !timingSafeEqual(Buffer.from(given), Buffer.from(token))) {
+      return reply.code(404).send({ error: { code: 'not_found', message: 'Route inconnue' } });
+    }
+    const { days } = z.object({ days: z.coerce.number().int().min(1).max(760).default(30) }).parse(req.query);
+    let rows: { day: string; path: string; event: string; lang: string; ref: string; n: number }[];
+    if (pool) {
+      rows = (await pool.query("SELECT to_char(day, 'YYYY-MM-DD') AS day, path, event, lang, ref, n FROM site_stats WHERE day > current_date - $1::int", [days])).rows;
+    } else {
+      rows = [...memStats].map(([k, n]) => { const [day, path, event, lang, ref] = k.split('|') as [string, string, string, string, string]; return { day, path, event, lang, ref, n }; });
+    }
+    const sum = (key: 'event' | 'path' | 'lang' | 'ref', filter = (_: typeof rows[number]) => true) => {
+      const m = new Map<string, number>();
+      for (const x of rows) if (filter(x)) m.set(x[key], (m.get(x[key]) ?? 0) + x.n);
+      return Object.fromEntries([...m].sort((a, b) => b[1] - a[1]).slice(0, 25));
+    };
+    return {
+      days, events: sum('event'), pages: sum('path', (x) => x.event === 'view'),
+      languages: sum('lang', (x) => x.event === 'view'), referrers: sum('ref', (x) => x.event === 'view' && x.ref !== ''),
+    };
+  });
+
+  app.setNotFoundHandler(async (req, reply) => {
+    if (req.method === 'GET' && !req.url.startsWith('/v1/') && (req.headers.accept ?? '').includes('text/html')) {
+      const l = (req.url.match(/^\/(fr|en|de|es|it|nl)\//)?.[1] as Lang | undefined) ?? pickLang(req.headers['accept-language']);
+      return reply.code(404).type('text/html; charset=utf-8').header('Cache-Control', 'no-cache').send(site.notFound(l).replaceAll('{{BASE}}', base(req)));
+    }
+    return reply.code(404).send({ error: { code: 'not_found', message: 'Route inconnue' } });
   });
 
   app.addHook('onClose', async () => {

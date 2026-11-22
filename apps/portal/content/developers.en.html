@@ -1,0 +1,34 @@
+<p class="legal-lede">One REST API, one JavaScript SDK and three bridges for existing tills. The same code works with every PSP in the catalogue.</p>
+<section><h2>Get started</h2>
+<ol><li><a href="{{url:contact}}">Request sandbox access</a>: you get a <code>mk_test_…</code> test key and demo points of sale.</li>
+<li>Install the SDK, or call the REST API with the <code>Authorization: Bearer &lt;key&gt;</code> header.</li>
+<li>Start a payment, then trigger a failure in the simulator to see the recovery.</li></ol>
+<pre class="code mono" tabindex="0" aria-label="Code example"><code>import { Meridian } from '@meridian/sdk';
+
+const meridian = new Meridian({ apiKey: process.env.MERIDIAN_KEY });
+
+const p = await meridian.pay({
+  posId: 'pos_paris_02',
+  reference: 'CMD-0412',      // your reference: replayable without a double charge
+  amount: 2450,               // in cents
+  currency: 'EUR',
+});
+const final = await meridian.waitForFinal(p.posId, p.reference);
+// final.state : authorized | declined | cancelled | failed</code></pre></section>
+<section><h2>The five calls</h2>
+<p><code>pay</code>, <code>status</code>, <code>cancel</code>, <code>refund</code>, <code>receipt</code>. The SDK handles retries, timeouts and lost responses; <code>waitForFinal</code> waits for the real outcome of the payment.</p>
+<p>Payment states: <code>created</code>, <code>pending</code>, <code>authorized</code>, <code>declined</code>, <code>cancelled</code>, <code>failed</code>. A network error never yields <code>failed</code> while the outcome at the PSP is unknown.</p></section>
+<section><h2>API reference</h2>
+<div class="tbl-wrap" tabindex="0" role="region" aria-label="API endpoints"><table class="legal-tbl"><thead><tr><th scope="col">Method</th><th scope="col">Path</th><th scope="col">Purpose</th></tr></thead><tbody><tr><td><code>POST</code></td><td><code>/v1/payments</code></td><td>Start a payment (idempotent per reference)</td></tr><tr><td><code>GET</code></td><td><code>/v1/payments/{ref}</code></td><td>Payment status</td></tr><tr><td><code>POST</code></td><td><code>/v1/payments/{ref}/cancel</code></td><td>Cancel a payment in progress</td></tr><tr><td><code>POST</code></td><td><code>/v1/payments/{ref}/refunds</code></td><td>Refund (idempotent)</td></tr><tr><td><code>GET</code></td><td><code>/v1/payments/{ref}/receipt</code></td><td>Receipt</td></tr><tr><td><code>GET</code></td><td><code>/v1/payments/{ref}/journal</code></td><td>Signed payment journal</td></tr><tr><td><code>GET</code></td><td><code>/v1/journal/verify</code></td><td>Check chain integrity</td></tr><tr><td><code>POST</code></td><td><code>/v1/pos</code></td><td>Create a point of sale</td></tr><tr><td><code>PUT</code></td><td><code>/v1/pos/{id}/routing</code></td><td>Choose the primary and backup PSP</td></tr><tr><td><code>POST</code></td><td><code>/v1/pos/{id}/health</code></td><td>Check the PSP connection</td></tr><tr><td><code>GET</code></td><td><code>/v1/modules</code></td><td>Connector catalogue</td></tr><tr><td><code>GET</code></td><td><code>/v1/countries</code></td><td>Countries, currencies and local methods</td></tr><tr><td><code>POST</code></td><td><code>/v1/nexo</code></td><td>nexo Retailer request (SaleToPOIRequest)</td></tr></tbody></table></div>
+<p>Errors always look like <code>{"error": {"code": "…", "message": "…"}}</code> with an explicit HTTP status.</p></section>
+<section><h2>Webhooks</h2>
+<p>Meridian sends the outcome of each payment to your URL. Each delivery is signed in the <code>meridian-signature</code> header and retried up to 12 times with increasing delays if your server does not answer.</p>
+<pre class="code mono" tabindex="0" aria-label="Signature check"><code>// meridian-signature: t=1763812345,v1=&lt;hex&gt;
+const [t, v1] = header.split(',').map((x) =&gt; x.split('=')[1]);
+const expected = createHmac('sha256', WEBHOOK_SECRET)
+  .update(`${t}.${rawBody}`).digest('hex');
+const ok = timingSafeEqual(Buffer.from(v1, 'hex'), Buffer.from(expected, 'hex'));</code></pre></section>
+<section><h2>Existing tills</h2>
+<p>A till already integrated with Concert, ZVT or nexo goes through Meridian without a rewrite: see <a href="{{url:concert}}">Concert</a>, <a href="{{url:zvt}}">ZVT</a> and <a href="{{url:nexo}}">nexo Retailer</a>.</p></section>
+<section><h2>For PSPs</h2>
+<p>A PSP joins the catalogue by describing its API in a declarative module (JSON), with no code in the engine. The module must declare idempotency and status lookup; it is published after passing the 8 failure scenarios against the PSP’s sandbox. <a href="{{url:contact}}">Get the module format</a>.</p></section>

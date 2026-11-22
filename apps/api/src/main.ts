@@ -23,6 +23,8 @@ const { app } = await buildServer({
   logger: true,
   trustProxy: env.TRUST_PROXY === 'true',
   publicUrl: env.PUBLIC_URL,
+  securityContact: env.SECURITY_CONTACT,
+  metricsToken: env.METRICS_TOKEN,
   contactRetentionDays: env.CONTACT_RETENTION_DAYS ? Number(env.CONTACT_RETENTION_DAYS) : undefined,
   engine: env.SCAN_MS ? { scanMs: Number(env.SCAN_MS) } : undefined,
   bridges: {

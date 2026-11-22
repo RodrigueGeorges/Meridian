@@ -1,0 +1,5 @@
+<section><h2>The protocol</h2><p>ZVT is the reference protocol in Germany, Austria and Switzerland for connecting a till to a payment terminal.</p></section>
+<section><h2>What Meridian does</h2><p>Meridian exposes a ZVT bridge on the store’s local network (TCP port 20007 by default), mapped to a Meridian point of sale. The till does not need to know which PSP processes the payment.</p>
+<ul><li>No change needed in the till software.</li><li>Every payment received by the bridge goes through the same engine: signed journal, idempotency, recovery, zero double charges.</li><li>The merchant can switch PSP without touching the till.</li></ul></section>
+<section><h2>Status</h2><p>Bridge available in the demo. Response codes will be checked against the official specification before any certification.</p></section>
+<section><h2>Learn more</h2><p><a href="{{url:developers}}">Developer documentation</a> · <a href="{{url:contact}}">Talk about your integration</a></p></section>

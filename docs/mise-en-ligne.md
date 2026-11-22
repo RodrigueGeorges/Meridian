@@ -35,5 +35,14 @@ Les étapes de l'image ont été rejouées sans Docker : installation figée OK,
 | `TRUST_PROXY` | Lit l'IP client derrière le proxy Fly (limites de débit par visiteur) | `true` (déjà dans `infra/fly/api.toml`) |
 | `PUBLIC_URL` | URL absolue du site pour canonical, hreflang, Open Graph, robots.txt et sitemap | `https://<domaine>` |
 | `CONTACT_RETENTION_DAYS` | Conservation des demandes de contact, purge automatique horaire | `1095` (3 ans, valeur par défaut) |
+| `SECURITY_CONTACT` | Contact publié dans `/.well-known/security.txt` | `mailto:security@<domaine>` (défaut) |
+| `METRICS_TOKEN` | Jeton de lecture des statistiques d'audience : `GET /v1/metrics?days=30` avec `Authorization: Bearer <jeton>`. Sans jeton, la route n'existe pas | secret aléatoire |
 
-Avant la mise en ligne : compléter les champs surlignés de `mentions-legales.html`, `legal-notice.html`, `confidentialite.html` et `privacy.html` (société, siège, RCS, directeur de la publication, adresse de l'hébergeur, mécanisme de transfert Fly.io, contact données personnelles).
+### Site public
+
+- `/` redirige vers la langue du navigateur (`/fr/`, `/en/`, `/de/`, `/es/`, `/it/`, `/nl/`) ; les anciennes adresses `/portal/…` redirigent en 301.
+- Pages pré-rendues : le texte est dans le HTML (indexable sans JavaScript). Fichiers CSS, JS et images avec empreinte dans le nom, en cache un an.
+- Mesure d'audience sans cookie ni identifiant (`POST /v1/a`) : compteurs agrégés par jour, purge après 25 mois, désactivée si le navigateur envoie Global Privacy Control ou Do Not Track.
+- Après la mise en ligne : déclarer le domaine dans Google Search Console et y soumettre `/sitemap.xml`.
+
+Avant la mise en ligne : compléter les champs surlignés (`[[…]]`) de `apps/portal/content/` : `legal`, `privacy`, `security` et `stripe` en FR et EN (société, siège, RCS, directeur de la publication, adresse de l'hébergeur, mécanisme de transfert Fly.io, contact données personnelles).

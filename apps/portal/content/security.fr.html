@@ -1,0 +1,25 @@
+<p class="legal-lede">Meridian se place entre la caisse et le PSP. Voici ce que nous voyons, ce que nous gardons, et comment vous pouvez le vérifier.</p>
+<section><h2>Ce qui ne passe jamais par Meridian</h2>
+<ul><li><b>Aucun numéro de carte complet.</b> La carte est lue par le terminal du PSP. Meridian ne reçoit que ce que le PSP renvoie sur le reçu : la marque et les quatre derniers chiffres.</li>
+<li><b>Aucun fonds.</b> L’argent va du PSP au marchand. Meridian n’est pas un établissement de paiement et ne détient aucun compte de cantonnement.</li>
+<li><b>Aucune décision automatique opaque.</b> Aucun modèle d’IA n’intervient dans le traitement d’un paiement.</li></ul></section>
+<section><h2>Un paiement n’est jamais perdu ni débité deux fois</h2>
+<ul><li>Chaque étape est écrite dans le journal <b>avant</b> l’appel au PSP.</li>
+<li>Chaque étape porte une clé d’idempotence : un appel rejoué ne crée pas un second débit.</li>
+<li>Une erreur réseau donne l’état « en cours », jamais « échec » : Meridian interroge le PSP pour connaître l’issue réelle.</li>
+<li>La bascule vers un PSP de secours n’a lieu que si la connexion est refusée avant tout envoi.</li>
+<li>Si une instance tombe en plein paiement, une autre reprend le paiement là où il en était.</li></ul>
+<p>Ces règles sont vérifiées à chaque version : 8 scénarios de panne et 200 séquences de pannes aléatoires, avec pour seul critère de réussite un débit unique.</p></section>
+<section><h2>Un journal que l’on peut prouver</h2>
+<p>Chaque entrée du journal est chaînée à la précédente par une empreinte SHA-256 et signée par HMAC. En base, le journal est en ajout seul : la modification d’une entrée existante est refusée. L’intégrité de la chaîne se vérifie à tout moment par l’API (<code>GET /v1/journal/verify</code>).</p></section>
+<section><h2>Secrets et accès</h2>
+<ul><li>Les identifiants PSP des marchands sont chiffrés au repos (AES-256-GCM).</li>
+<li>Les clés API ne sont conservées que sous forme d’empreinte ; les clés de test et de production sont distinctes.</li>
+<li>Les webhooks sont signés (HMAC-SHA256 avec horodatage) pour que vous puissiez vérifier leur origine.</li>
+<li>Les échanges sont chiffrés (HTTPS, HSTS) et le site applique une politique de sécurité du contenu stricte.</li></ul></section>
+<section><h2>Hébergement</h2>
+<p>L’application est hébergée dans la région de Paris. [[Base de données : fournisseur et région à préciser]].</p></section>
+<section><h2>Ce que nous n’avons pas encore</h2>
+<p>Meridian n’a pas, à ce jour, de certification PCI DSS ni ISO 27001. Comme Meridian ne traite pas de numéro de carte complet, son périmètre PCI DSS est réduit ; le niveau exact sera confirmé par un évaluateur qualifié. Nous publierons chaque certification obtenue sur cette page, jamais avant.</p></section>
+<section><h2>Signaler une vulnérabilité</h2>
+<p>Écrivez à [[adresse e-mail sécurité]]. Nous accusons réception sous 2 jours ouvrés. Les coordonnées sont aussi publiées dans <a href="/.well-known/security.txt">security.txt</a>.</p></section>

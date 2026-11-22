@@ -1,0 +1,34 @@
+<p class="legal-lede">Une API REST, un SDK JavaScript et trois passerelles pour les caisses existantes. Le même code fonctionne avec chaque PSP du catalogue.</p>
+<section><h2>Démarrer</h2>
+<ol><li><a href="{{url:contact}}">Demandez un accès sandbox</a> : vous recevez une clé de test <code>mk_test_…</code> et des points de vente de démonstration.</li>
+<li>Installez le SDK, ou appelez l’API REST avec l’en-tête <code>Authorization: Bearer &lt;clé&gt;</code>.</li>
+<li>Lancez un paiement, puis provoquez une panne dans le simulateur pour voir la reprise.</li></ol>
+<pre class="code mono" tabindex="0" aria-label="Exemple de code"><code>import { Meridian } from '@meridian/sdk';
+
+const meridian = new Meridian({ apiKey: process.env.MERIDIAN_KEY });
+
+const p = await meridian.pay({
+  posId: 'pos_paris_02',
+  reference: 'CMD-0412',      // votre référence : rejouable sans double débit
+  amount: 2450,               // en centimes
+  currency: 'EUR',
+});
+const final = await meridian.waitForFinal(p.posId, p.reference);
+// final.state : authorized | declined | cancelled | failed</code></pre></section>
+<section><h2>Les cinq appels</h2>
+<p><code>pay</code>, <code>status</code>, <code>cancel</code>, <code>refund</code>, <code>receipt</code>. Le SDK gère les rejeux, les délais et les réponses perdues ; <code>waitForFinal</code> attend l’issue réelle du paiement.</p>
+<p>États d’un paiement : <code>created</code>, <code>pending</code>, <code>authorized</code>, <code>declined</code>, <code>cancelled</code>, <code>failed</code>. Une erreur réseau ne donne jamais <code>failed</code> tant que l’issue chez le PSP n’est pas connue.</p></section>
+<section><h2>Référence de l’API</h2>
+<div class="tbl-wrap" tabindex="0" role="region" aria-label="Points d’accès de l’API"><table class="legal-tbl"><thead><tr><th scope="col">Méthode</th><th scope="col">Chemin</th><th scope="col">Rôle</th></tr></thead><tbody><tr><td><code>POST</code></td><td><code>/v1/payments</code></td><td>Lancer un paiement (idempotent par référence)</td></tr><tr><td><code>GET</code></td><td><code>/v1/payments/{ref}</code></td><td>État d’un paiement</td></tr><tr><td><code>POST</code></td><td><code>/v1/payments/{ref}/cancel</code></td><td>Annuler un paiement en cours</td></tr><tr><td><code>POST</code></td><td><code>/v1/payments/{ref}/refunds</code></td><td>Rembourser (idempotent)</td></tr><tr><td><code>GET</code></td><td><code>/v1/payments/{ref}/receipt</code></td><td>Reçu</td></tr><tr><td><code>GET</code></td><td><code>/v1/payments/{ref}/journal</code></td><td>Journal signé du paiement</td></tr><tr><td><code>GET</code></td><td><code>/v1/journal/verify</code></td><td>Vérifier l’intégrité de la chaîne</td></tr><tr><td><code>POST</code></td><td><code>/v1/pos</code></td><td>Créer un point de vente</td></tr><tr><td><code>PUT</code></td><td><code>/v1/pos/{id}/routing</code></td><td>Choisir le PSP principal et le secours</td></tr><tr><td><code>POST</code></td><td><code>/v1/pos/{id}/health</code></td><td>Vérifier la connexion au PSP</td></tr><tr><td><code>GET</code></td><td><code>/v1/modules</code></td><td>Catalogue des connecteurs</td></tr><tr><td><code>GET</code></td><td><code>/v1/countries</code></td><td>Pays, devises et moyens locaux</td></tr><tr><td><code>POST</code></td><td><code>/v1/nexo</code></td><td>Requête nexo Retailer (SaleToPOIRequest)</td></tr></tbody></table></div>
+<p>Les erreurs ont toujours la forme <code>{"error": {"code": "…", "message": "…"}}</code> avec un code HTTP explicite.</p></section>
+<section><h2>Webhooks</h2>
+<p>Meridian envoie l’issue de chaque paiement à votre URL. Chaque envoi est signé dans l’en-tête <code>meridian-signature</code> et rejoué jusqu’à 12 fois avec un délai croissant si votre serveur ne répond pas.</p>
+<pre class="code mono" tabindex="0" aria-label="Vérification de signature"><code>// meridian-signature: t=1763812345,v1=&lt;hex&gt;
+const [t, v1] = header.split(',').map((x) =&gt; x.split('=')[1]);
+const expected = createHmac('sha256', WEBHOOK_SECRET)
+  .update(`${t}.${rawBody}`).digest('hex');
+const ok = timingSafeEqual(Buffer.from(v1, 'hex'), Buffer.from(expected, 'hex'));</code></pre></section>
+<section><h2>Caisses existantes</h2>
+<p>Une caisse déjà intégrée en Concert, ZVT ou nexo passe par Meridian sans réécriture : voir <a href="{{url:concert}}">Concert</a>, <a href="{{url:zvt}}">ZVT</a> et <a href="{{url:nexo}}">nexo Retailer</a>.</p></section>
+<section><h2>Pour les PSP</h2>
+<p>Un PSP entre dans le catalogue en décrivant son API dans un module déclaratif (JSON), sans code dans le moteur. Le module doit déclarer l’idempotence et la consultation d’état ; il est publié après avoir passé les 8 scénarios de panne contre la sandbox du PSP. <a href="{{url:contact}}">Recevoir le format des modules</a>.</p></section>

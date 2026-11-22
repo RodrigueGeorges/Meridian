@@ -1,0 +1,156 @@
+[
+ {
+  "id": "legal",
+  "slug": {
+   "fr": "mentions-legales",
+   "en": "legal-notice"
+  },
+  "title": {
+   "fr": "Mentions légales",
+   "en": "Legal notice"
+  },
+  "desc": {
+   "fr": "Éditeur, hébergeur et nature du service Meridian.",
+   "en": "Publisher, hosting provider and nature of the Meridian service."
+  },
+  "todo": true
+ },
+ {
+  "id": "privacy",
+  "slug": {
+   "fr": "confidentialite",
+   "en": "privacy"
+  },
+  "title": {
+   "fr": "Politique de confidentialité",
+   "en": "Privacy policy"
+  },
+  "desc": {
+   "fr": "Données traitées par le site Meridian, finalités, durées de conservation et vos droits.",
+   "en": "Data processed by the Meridian site, purposes, retention and your rights."
+  },
+  "todo": true
+ },
+ {
+  "id": "security",
+  "slug": {
+   "fr": "securite",
+   "en": "security"
+  },
+  "title": {
+   "fr": "Sécurité",
+   "en": "Security"
+  },
+  "desc": {
+   "fr": "Ce qui passe par Meridian, ce qui n’y passe jamais, et comment vérifier chaque paiement : journal signé, idempotence, secrets chiffrés.",
+   "en": "What goes through Meridian, what never does, and how to verify every payment: signed journal, idempotency, encrypted secrets."
+  },
+  "todo": true
+ },
+ {
+  "id": "developers",
+  "slug": {
+   "fr": "developpeurs",
+   "en": "developers"
+  },
+  "title": {
+   "fr": "Développeurs",
+   "en": "Developers"
+  },
+  "desc": {
+   "fr": "API REST, SDK JavaScript, webhooks signés et passerelles Concert, ZVT et nexo pour connecter une caisse à tous les PSP du catalogue.",
+   "en": "REST API, JavaScript SDK, signed webhooks and Concert, ZVT and nexo bridges to connect a till to every PSP in the catalogue."
+  }
+ },
+ {
+  "id": "contact",
+  "slug": {
+   "fr": "contact",
+   "en": "contact"
+  },
+  "title": {
+   "fr": "Contact",
+   "en": "Contact"
+  },
+  "desc": {
+   "fr": "Éditeurs de caisse et PSP : parlons de votre intégration à Meridian. Réponse sous 48 heures ouvrées.",
+   "en": "Till software vendors and PSPs: let’s talk about your Meridian integration. Reply within 2 business days."
+  }
+ },
+ {
+  "id": "concert",
+  "slug": {
+   "fr": "protocole-concert-caisse-ap",
+   "en": "concert-caisse-ap-protocol"
+  },
+  "title": {
+   "fr": "Concert (Caisse-AP) vers tous les PSP",
+   "en": "Concert (Caisse-AP) to every PSP"
+  },
+  "desc": {
+   "fr": "Gardez votre intégration Concert / Caisse-AP et connectez la caisse à n’importe quel PSP du catalogue Meridian, sans réécriture.",
+   "en": "Keep your Concert / Caisse-AP integration and connect the till to any PSP in the Meridian catalogue, without a rewrite."
+  }
+ },
+ {
+  "id": "zvt",
+  "slug": {
+   "fr": "protocole-zvt",
+   "en": "zvt-protocol"
+  },
+  "title": {
+   "fr": "ZVT vers tous les PSP",
+   "en": "ZVT to every PSP"
+  },
+  "desc": {
+   "fr": "Gardez votre intégration ZVT et connectez la caisse à n’importe quel PSP du catalogue Meridian, en Allemagne, en Autriche et en Suisse.",
+   "en": "Keep your ZVT integration and connect the till to any PSP in the Meridian catalogue, in Germany, Austria and Switzerland."
+  }
+ },
+ {
+  "id": "nexo",
+  "slug": {
+   "fr": "nexo-retailer",
+   "en": "nexo-retailer"
+  },
+  "title": {
+   "fr": "nexo Retailer vers tous les PSP",
+   "en": "nexo Retailer to every PSP"
+  },
+  "desc": {
+   "fr": "Envoyez vos messages nexo Retailer à Meridian et atteignez tous les PSP du catalogue, avec journal signé et zéro double débit.",
+   "en": "Send your nexo Retailer messages to Meridian and reach every PSP in the catalogue, with a signed journal and zero double charges."
+  }
+ },
+ {
+  "id": "stripe",
+  "slug": {
+   "fr": "connecteur-stripe-terminal",
+   "en": "stripe-terminal-connector"
+  },
+  "title": {
+   "fr": "Connecteur Stripe Terminal",
+   "en": "Stripe Terminal connector"
+  },
+  "desc": {
+   "fr": "Pilotez un terminal Stripe depuis n’importe quelle caisse par les cinq appels Meridian. Le marchand garde son contrat Stripe.",
+   "en": "Drive a Stripe terminal from any till with the five Meridian calls. The merchant keeps its Stripe contract."
+  },
+  "todo": true
+ },
+ {
+  "id": "accessibility",
+  "slug": {
+   "fr": "accessibilite",
+   "en": "accessibility"
+  },
+  "title": {
+   "fr": "Accessibilité",
+   "en": "Accessibility"
+  },
+  "desc": {
+   "fr": "Engagement d’accessibilité du site Meridian, résultats des tests et contact.",
+   "en": "Accessibility commitment of the Meridian site, test results and contact."
+  }
+ }
+]

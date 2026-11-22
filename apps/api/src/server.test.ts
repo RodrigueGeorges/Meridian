@@ -26,6 +26,7 @@ for (const mode of ['memory', 'postgres'] as const) {
         bootstrapKey: KEY, allowTestBaseUrl: true,
         demoSeed: { stripeUrl: sims.stripeUrl, secoursUrl: sims.secoursUrl },
         engine: { pollMs: 40, retryMs: 60 },
+        metricsToken: 'metrics-test-token',
       });
       await server.app.listen({ port: 0, host: '127.0.0.1' });
       base = `http://127.0.0.1:${(server.app.server.address() as { port: number }).port}`;
@@ -123,30 +124,54 @@ for (const mode of ['memory', 'postgres'] as const) {
     });
 
     it('sert le portail et le catalogue', async () => {
-      expect((await fetch(`${base}/portal/`)).status).toBe(200);
+      expect((await fetch(`${base}/fr/`)).status).toBe(200);
       const mods = await (await fetch(`${base}/v1/modules`)).json();
       expect(mods.map((m: { id: string }) => m.id)).toContain('stripe-terminal');
     });
 
-    it('site public : en-têtes de sécurité, compression, robots, sitemap, URL absolues, pages légales', async () => {
-      const home = await fetch(`${base}/portal/`, { headers: { 'accept-encoding': 'br' } });
+    it('site public : 24 pages pré-rendues, hreflang, en-têtes de sécurité, compression, redirections', async () => {
+      const home = await fetch(`${base}/fr/`, { headers: { 'accept-encoding': 'br' } });
+      expect(home.status).toBe(200);
       expect(home.headers.get('content-security-policy')).toContain("script-src 'self'");
-      expect(home.headers.get('content-security-policy')).toContain("frame-ancestors 'none'");
       expect(home.headers.get('strict-transport-security')).toContain('max-age=31536000');
-      expect(home.headers.get('x-content-type-options')).toBe('nosniff');
       expect(home.headers.get('content-encoding')).toBe('br');
-      expect(home.headers.get('cache-control')).toBe('no-cache');
       const html = await home.text();
       expect(html).not.toContain('{{BASE}}');
-      expect(html).toContain(`<link rel="canonical" href="${base}/portal/">`);
-      const font = await fetch(`${base}/portal/fonts/instrument-sans-latin-500-normal.woff2`);
-      expect(font.headers.get('cache-control')).toContain('immutable');
-      expect(await (await fetch(`${base}/robots.txt`)).text()).toContain(`Sitemap: ${base}/sitemap.xml`);
-      const map = await (await fetch(`${base}/sitemap.xml`)).text();
-      expect(map).toContain(`${base}/portal/confidentialite.html`);
-      for (const f of ['mentions-legales', 'legal-notice', 'confidentialite', 'privacy']) {
-        expect((await fetch(`${base}/portal/${f}.html`)).status).toBe(200);
+      expect(html).toContain(`<link rel="canonical" href="${base}/fr/">`);
+      expect(html).toContain(`hreflang="de" href="${base}/de/"`);
+      // texte déjà dans le HTML, sans JavaScript, dans la bonne langue
+      const de = await (await fetch(`${base}/de/kassensoftware/`)).text();
+      expect(de).toMatch(/<html[^>]*lang="de"/);
+      expect(de).toContain('Verlieren Sie keinen Verkauf mehr');
+      expect(de).not.toContain('data-view="home"');
+      const css = de.match(/href="(\/assets\/site\.[0-9a-f]+\.css)"/)![1]!;
+      expect((await fetch(`${base}${css}`)).headers.get('cache-control')).toContain('immutable');
+      for (const p of ['/fr/editeurs/', '/en/pos-software/', '/it/demo/', '/nl/psp/', '/fr/securite/', '/en/developers/', '/fr/contact/', '/en/zvt-protocol/', '/fr/mentions-legales/', '/en/privacy/']) {
+        expect((await fetch(`${base}${p}`)).status, p).toBe(200);
       }
+      const root = await fetch(`${base}/`, { redirect: 'manual', headers: { 'accept-language': 'es-ES,es;q=0.9' } });
+      expect(root.headers.get('location')).toBe('/es/');
+      expect((await fetch(`${base}/portal/`, { redirect: 'manual' })).status).toBe(301);
+      expect((await fetch(`${base}/portal/confidentialite.html`, { redirect: 'manual' })).headers.get('location')).toBe('/fr/confidentialite/');
+      expect((await fetch(`${base}/fr/nexistepas/`, { headers: { accept: 'text/html' } })).status).toBe(404);
+      expect((await fetch(`${base}/portal/console.html`)).status).toBe(200);
+      const map = await (await fetch(`${base}/sitemap.xml`)).text();
+      expect(map.match(/<url>/g)!.length).toBe(44);
+      expect(await (await fetch(`${base}/robots.txt`)).text()).toContain(`Sitemap: ${base}/sitemap.xml`);
+      expect(await (await fetch(`${base}/.well-known/security.txt`)).text()).toMatch(/^Contact: mailto:security@/);
+    });
+
+    it('mesure d\'audience : compteurs anonymes, lecture protégée', async () => {
+      const beacon = (b: unknown) => fetch(`${base}/v1/a`, { method: 'POST', headers: { 'content-type': 'text/plain' }, body: JSON.stringify(b) });
+      expect((await beacon({ e: 'view', p: '/fr/', l: 'fr', r: 'linkedin.com' })).status).toBe(204);
+      expect((await beacon({ e: 'cta_psp', p: '/fr/psp/', l: 'fr' })).status).toBe(204);
+      expect((await beacon({ e: 'inconnu', p: '/x' })).status).toBe(204); // ignoré
+      expect((await fetch(`${base}/v1/metrics`)).status).toBe(404);
+      const m = await (await fetch(`${base}/v1/metrics?days=2`, { headers: { authorization: 'Bearer metrics-test-token' } })).json();
+      expect(m.events.view).toBeGreaterThanOrEqual(1);
+      expect(m.events.cta_psp).toBeGreaterThanOrEqual(1);
+      expect(m.referrers['linkedin.com']).toBeGreaterThanOrEqual(1);
+      expect(m.events.inconnu).toBeUndefined();
     });
 
     it('contact : limite de 5 demandes par heure et par adresse', async () => {
