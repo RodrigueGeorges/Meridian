@@ -36,7 +36,7 @@ rand() { openssl rand -hex "$1" 2>/dev/null || node -e "console.log(require('cry
 "$FLY" auth whoami >/dev/null 2>&1 || die "Non connecté : lance « $FLY auth login » puis relance ce script."
 
 say "1/5 App $APP ($REGION)"
-if ! "$FLY" apps list 2>/dev/null | grep -q "^$APP\b"; then
+if ! "$FLY" apps list 2>/dev/null | awk '{print $1}' | grep -Fxq "$APP"; then
   "$FLY" apps create "$APP" --org personal >/dev/null 2>&1 \
     || "$FLY" apps create "$APP" >/dev/null 2>&1 \
     || "$FLY" launch --config infra/fly/api.prod.toml --name "$APP" --region "$REGION" --no-deploy
@@ -64,14 +64,15 @@ if [ -f "$SECRETS_FILE" ]; then
   # shellcheck disable=SC1090
   . "$SECRETS_FILE"
 else
-  JOURNAL_KEY="$(rand 32)"; MASTER_KEY="$(rand 32)"; BOOTSTRAP_API_KEY="mk_live_$(rand 16)"
-  { echo "JOURNAL_KEY=$JOURNAL_KEY"; echo "MASTER_KEY=$MASTER_KEY"; echo "BOOTSTRAP_API_KEY=$BOOTSTRAP_API_KEY"; } > "$SECRETS_FILE"
+  JOURNAL_KEY="$(rand 32)"; MASTER_KEY="$(rand 32)"; BOOTSTRAP_API_KEY="mk_live_$(rand 16)"; METRICS_TOKEN="$(rand 16)"
+  { echo "JOURNAL_KEY=$JOURNAL_KEY"; echo "MASTER_KEY=$MASTER_KEY"; echo "BOOTSTRAP_API_KEY=$BOOTSTRAP_API_KEY"; echo "METRICS_TOKEN=$METRICS_TOKEN"; } > "$SECRETS_FILE"
   chmod 600 "$SECRETS_FILE" 2>/dev/null || true
 fi
-[ -n "${DATABASE_URL:-}" ] && "$FLY" secrets set -a "$APP" DATABASE_URL="$DATABASE_URL" || true
+METRICS_TOKEN="${METRICS_TOKEN:-$(rand 16)}" # les fichiers de secrets antérieurs n'en avaient pas
+[ -z "${DATABASE_URL:-}" ] || "$FLY" secrets set -a "$APP" DATABASE_URL="$DATABASE_URL"
 "$FLY" secrets set -a "$APP" \
   JOURNAL_KEY="$JOURNAL_KEY" MASTER_KEY="$MASTER_KEY" \
-  BOOTSTRAP_API_KEY="$BOOTSTRAP_API_KEY" PUBLIC_URL="$PUBLIC_URL" METRICS_TOKEN="$(rand 16)"
+  BOOTSTRAP_API_KEY="$BOOTSTRAP_API_KEY" PUBLIC_URL="$PUBLIC_URL" METRICS_TOKEN="$METRICS_TOKEN"
 
 say "4/5 Déploiement"
 "$FLY" deploy --config infra/fly/api.prod.toml -a "$APP" --remote-only

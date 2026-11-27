@@ -49,6 +49,9 @@ export async function handleNexo(body: Json, target: BridgeTarget, opts: { timeo
       byCur.set(v.currency, { n: t.n + 1, amount: t.amount + v.amount - v.refunded });
       done.add(v.reference);
     }
+    // Les références rapprochées sont conservées à vie : on borne la mémoire — les plus anciennes sont
+    // réémises au prochain rapprochement (un total peut alors ré-inclure des paiements déjà comptés).
+    if (done.size > 5000) for (const old of [...done].slice(0, done.size - 5000)) done.delete(old);
     reconciled.set(posId, done);
     return {
       SaleToPOIResponse: {

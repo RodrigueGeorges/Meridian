@@ -45,8 +45,8 @@
   "cancel": { "method": "POST", "path": "/v0.1/merchants/{{config.merchantCode}}/readers/{{config.readerId}}/terminate", "busyCodes": [] },
   "refund": {
     "method": "POST",
-    "path": "/v0.1/me/refund/{{receipt.transactionId}}",
-    "body": { "amount": "{{refund.amountMajor}}" }
+    "path": "/v1.0/merchants/{{config.merchantCode}}/payments/{{receipt.transactionId}}/refunds",
+    "body": { "amount": "{{refund.amount}}" }
   },
   "receipt": { "transactionId": "t.id", "brand": "t.card.type", "last4": "t.card.last_4_digits" },
   "capabilities": {

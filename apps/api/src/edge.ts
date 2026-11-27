@@ -50,6 +50,15 @@ export class EdgeRelay {
     return this.conns.size;
   }
 
+  /** Arrêt : termine les connexions agents (sinon app.close() attend leurs sockets indéfiniment). */
+  close() {
+    for (const c of this.conns.values()) {
+      for (const p of c.pending.values()) p.reject(netErr('ECONNRESET', 'arrêt du serveur'));
+      try { c.ws.terminate(); } catch { /* déjà fermé */ }
+    }
+    this.conns.clear();
+  }
+
   /** Enveloppe un fetch : les URL edge:// passent par l'agent, les autres partent sur Internet. */
   fetcher(base: typeof fetch = fetch): typeof fetch {
     return (async (input: string | URL | Request, init?: RequestInit) => {

@@ -9,3 +9,4 @@ tools
 *.jsonl
 rapport-sandbox*.md
 .env
+.secrets-prod.txt

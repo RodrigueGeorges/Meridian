@@ -42,11 +42,11 @@ export function parseBmps(d: Buffer): { amount?: number; currency?: string; rece
   let i = 0;
   while (i < d.length) {
     const b = d[i]!;
-    if (b === 0x04) { out.amount = fromBcd(d.subarray(i + 1, i + 7)); i += 7; }
-    else if (b === 0x49) { out.currency = String(fromBcd(d.subarray(i + 1, i + 3))).padStart(3, '0'); i += 3; }
-    else if (b === 0x87) { out.receipt = fromBcd(d.subarray(i + 1, i + 3)); i += 3; }
-    else if (b === 0x01 || b === 0x19) i += 2;
-    else if (b === 0x02) i += 2;
+    if (b === 0x04) { if (i + 7 > d.length) break; out.amount = fromBcd(d.subarray(i + 1, i + 7)); i += 7; }
+    else if (b === 0x49) { if (i + 3 > d.length) break; out.currency = String(fromBcd(d.subarray(i + 1, i + 3))).padStart(3, '0'); i += 3; }
+    else if (b === 0x87) { if (i + 3 > d.length) break; out.receipt = fromBcd(d.subarray(i + 1, i + 3)); i += 3; }
+    else if (b === 0x01 || b === 0x19) { if (i + 2 > d.length) break; i += 2; }
+    else if (b === 0x02) { if (i + 2 > d.length) break; i += 2; }
     else break; // BMP inconnu : on s'arrête, le montant est en tête dans la pratique
   }
   return out;
@@ -148,5 +148,9 @@ export function createZvtServer(target: BridgeTarget, o: ZvtOptions): net.Server
     sock.on('error', () => undefined);
   });
   srv.maxConnections = 200; // au-delà : la connexion est refusée (événement 'drop'), le serveur reste vivant
+  // Arrêt propre : server.close() n'attend pas les sockets déjà ouvertes, on les suit pour les détruire.
+  const socks = new Set<net.Socket>();
+  srv.on('connection', (sock) => { socks.add(sock); sock.on('close', () => socks.delete(sock)); });
+  (srv as net.Server & { closeAll?: () => void }).closeAll = () => { for (const s of socks) s.destroy(); };
   return srv;
 }

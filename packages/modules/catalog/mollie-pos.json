@@ -35,7 +35,7 @@
     "rules": [
       { "when": [{ "path": "p.status", "equals": "paid" }], "state": "authorized" },
       { "when": [{ "path": "p.status", "equals": "canceled" }], "state": "cancelled" },
-      { "when": [{ "path": "p.status", "equals": "failed" }], "state": "declined", "detailPath": "p.details.failureReason" },
+      { "when": [{ "path": "p.status", "equals": "failed" }], "state": "declined", "detailPath": "p.statusReason.code" },
       { "when": [{ "path": "p.status", "equals": "expired" }], "state": "declined", "detailPath": "p.status" }
     ]
   },
@@ -45,7 +45,7 @@
     "path": "/v2/payments/{{vars.paymentId}}/refunds",
     "body": { "amount": { "currency": "{{tx.currency}}", "value": "{{refund.amountString}}" } }
   },
-  "receipt": { "brand": "p.cardDetails.cardLabel", "maskedPan": "p.cardDetails.cardNumber" },
+  "receipt": { "brand": "p.details.cardLabel", "maskedPan": "p.details.cardNumber" },
   "capabilities": {
     "countries": ["NL", "BE", "DE", "FR"],
     "currencies": ["EUR"],

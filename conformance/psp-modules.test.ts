@@ -27,7 +27,7 @@ describe('Mollie point-of-sale', () => {
       seen.push({ url, body, idem: new Headers(init.headers).get('idempotency-key') });
       expect(new Headers(init.headers).get('authorization')).toBe('Bearer test_k');
       if (url.endsWith('/v2/payments') && init.method === 'POST') return j({ id: 'tr_1', status: 'open' }, 201);
-      if (url.endsWith('/v2/payments/tr_1')) return j({ id: 'tr_1', status: ++polls < 2 ? 'open' : 'paid', cardDetails: { cardLabel: 'VISA', cardNumber: '**** **** **** 1234' } });
+      if (url.endsWith('/v2/payments/tr_1')) return j({ id: 'tr_1', status: ++polls < 2 ? 'open' : 'paid', details: { cardLabel: 'VISA', cardNumber: '**** **** **** 1234' } });
       if (url.endsWith('/v2/payments/tr_1/refunds')) return j({ id: 're_1' }, 201);
       throw new Error('inattendu ' + url);
     }) as unknown as typeof fetch;
@@ -95,7 +95,7 @@ describe('SumUp Solo (Cloud API)', () => {
         if (++polls > 1) tx.status = o.outcome ?? 'SUCCESSFUL';
         return j({ ...tx, card: { type: 'VISA', last_4_digits: '4242' } });
       }
-      if (url.endsWith('/v0.1/me/refund/txn_1')) return new Response(null, { status: 204 });
+      if (url.endsWith('/v1.0/merchants/MC/payments/txn_1/refunds')) { expect(JSON.parse(String(init.body))).toEqual({ amount: 990 }); return new Response(null, { status: 204 }); }
       throw new Error('inattendu ' + url);
     }) as unknown as typeof fetch;
     return { f, checkouts: () => checkouts };

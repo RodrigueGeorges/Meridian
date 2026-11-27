@@ -105,6 +105,10 @@ export function createConcertServer(target: BridgeTarget, o: ConcertOptions): ne
     sock.on('error', () => undefined);
   });
   srv.maxConnections = 200; // au-delà : la connexion est refusée (événement 'drop'), le serveur reste vivant
+  // Arrêt propre : server.close() n'attend pas les sockets déjà ouvertes, on les suit pour les détruire.
+  const socks = new Set<net.Socket>();
+  srv.on('connection', (sock) => { socks.add(sock); sock.on('close', () => socks.delete(sock)); });
+  (srv as net.Server & { closeAll?: () => void }).closeAll = () => { for (const s of socks) s.destroy(); };
   return srv;
 }
 

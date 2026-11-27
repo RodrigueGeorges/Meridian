@@ -162,16 +162,24 @@ export async function buildServer(o: ServerOptions) {
     try { u = new URL(raw); } catch { return false; }
     if (o.allowTestBaseUrl) return u.protocol === 'http:' || u.protocol === 'https:';
     if (u.protocol !== 'https:') return false;
-    const h = u.hostname.toLowerCase();
-    if (h === 'localhost' || h === '::1' || h === '[::1]') return false;
-    return !/^(127\.|169\.254\.|10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.)/.test(h);
+    // WHATWG normalise déjà les IPv4 exotiques (octal, hex, entier unique) en forme pointée.
+    const h = u.hostname.toLowerCase().replace(/\.+$/, '');
+    if (h === 'localhost' || h === '0.0.0.0') return false;
+    if (h.includes(':') || !h.includes('.')) return false; // IPv6 littéral et noms internes à un label
+    if (h === 'metadata.google.internal' || h === 'host.docker.internal' || h === 'kubernetes.default'
+        || h.endsWith('.internal') || h.endsWith('.local') || h.endsWith('.localhost')
+        || h.endsWith('.lan') || h.endsWith('.corp') || h.endsWith('.home.arpa')) return false;
+    // Loopback, privés, link-local, CGNAT, documentation et diffusion : tout ce qui n'est pas public.
+    return !/^(127\.|0\.|169\.254\.|10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.|100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.|192\.0\.0\.|192\.0\.2\.|198\.(1[89]|51\.100)\.|203\.0\.113\.|2([2-4][0-9]|5[0-5])\.|255\.)/.test(h);
   };
   const sign = (body: string) => {
     const t = Math.floor(Date.now() / 1000);
     return `t=${t},v1=${createHmac('sha256', o.webhookSecret ?? '').update(`${t}.${body}`).digest('hex')}`;
   };
   const post = async (url: string, body: string) => {
-    const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', 'meridian-signature': sign(body) }, body, signal: AbortSignal.timeout(5000) });
+    // redirect: 'manual' : une cible « publique » ne peut pas renvoyer le POST signé vers l'interne.
+    const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', 'meridian-signature': sign(body) }, body, signal: AbortSignal.timeout(5000), redirect: 'manual' });
+    if (r.status >= 300 && r.status < 400) throw new Error(`HTTP ${r.status} (redirection refusée)`);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
   };
   const deliver = async (orgId: string, event: string, data: unknown) => {
@@ -196,10 +204,11 @@ export async function buildServer(o: ServerOptions) {
     const p = pool;
     webhookTimer = setInterval(async () => {
       // Pas de verrou de ligne pendant l'appel HTTP : un endpoint lent bloquerait la file entière.
-      // Les livraisons dues sont marquées (+60 s sur next_at) par un UPDATE court qui libère les lignes
-      // tout de suite ; en cas de crash entre la marque et l'appel, elles redeviennent dues après ce délai.
+      // Les livraisons dues sont marquées (+5 min sur next_at, > le pire cas du batch de 20 × 5 s)
+      // par un UPDATE court ; en cas de crash entre la marque et l'appel, elles redeviennent dues
+      // après ce délai — jamais avant, sinon le tick suivant les relivrerait en double.
       const r = await p.query(
-        `UPDATE webhook_deliveries SET next_at = now() + interval '60 seconds' WHERE id IN (
+        `UPDATE webhook_deliveries SET next_at = now() + interval '5 minutes' WHERE id IN (
            SELECT id FROM webhook_deliveries WHERE status = 'pending' AND next_at <= now() ORDER BY next_at LIMIT 20 FOR UPDATE SKIP LOCKED
          ) RETURNING *`,
       ).catch(() => undefined);
@@ -351,6 +360,7 @@ export async function buildServer(o: ServerOptions) {
       await pool.query('DELETE FROM contact_requests WHERE created_at < now() - make_interval(days => $1::int)', [retentionDays]);
       await pool.query("DELETE FROM site_stats WHERE day < current_date - interval '25 months'");
       await pool.query("DELETE FROM audit_log WHERE at < now() - interval '370 days'");
+      await pool.query("DELETE FROM webhook_deliveries WHERE status IN ('delivered','failed') AND created_at < now() - interval '30 days'");
       await status.purge(90);
     } catch (e) { app.log.warn({ err: e }, 'purge'); }
   };
@@ -617,7 +627,9 @@ export async function buildServer(o: ServerOptions) {
     const b = z.object({ url: z.string().url().nullable(), secret: z.string().min(16).max(200).optional() }).parse(req.body);
     if (b.url !== null && !webhookUrlOk(b.url)) throw new MeridianError('webhook_url_forbidden', 'URL de webhook refusée : https et hôte public requis (http/loopback admis en mode test)', 422);
     await setOrgWebhook(org.id, b.url);
-    await audit(req, org, 'org.webhook_changed', org.id, { url: b.url });
+    // Audit sans credentials : on ne journalise que l'hôte et le chemin, jamais user:pass ni query.
+    const auditUrl = b.url === null ? null : (() => { const u = new URL(b.url); return `${u.origin}${u.pathname}`; })();
+    await audit(req, org, 'org.webhook_changed', org.id, { url: auditUrl });
     return { orgId: org.id, webhookUrl: b.url, note: b.secret ? 'secret par organisation non pris en charge : WEBHOOK_SECRET global utilisé' : undefined };
   });
 
@@ -805,6 +817,9 @@ export async function buildServer(o: ServerOptions) {
     if (webhookTimer) clearInterval(webhookTimer);
     clearInterval(purgeTimer);
     await cluster?.close();
+    edge.close(); // termine les WebSockets des agents (elles bloqueraient app.close indéfiniment)
+    // Idem pour les passerelles TCP : close() n'attend pas les sockets ouvertes, on les détruit.
+    for (const s of netServers) (s as NetServer & { closeAll?: () => void }).closeAll?.();
     await Promise.all(netServers.map((s) => new Promise((r) => s.close(r))));
     await pool?.end();
   });

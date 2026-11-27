@@ -66,6 +66,8 @@ interface Tx {
   refunds: { n: number; amount: number }[];
   /** Remboursements pré-journalisés, envoyés au PSP sans confirmation ni échec définitif. */
   pendingRefunds: { n: number; amount: number }[];
+  /** Plus grand numéro de remboursement attribué : un n d'un refund_failed n'est jamais réutilisé. */
+  refundSeq: number;
   /** Sérialise les remboursements de ce paiement dans l'instance. */
   refundTail?: Promise<unknown>;
   receipt?: Record<string, unknown>;
@@ -155,7 +157,7 @@ export class Engine {
 
     const tx: Tx = {
       posId, reference, amount, currency: currency as Currency, binding: routing.primary, fallback: routing.fallback, usingFallback: false,
-      vars: {}, step: 0, state: 'created', inDoubt: false, cancelRequested: false, cancelSent: false, refunds: [], pendingRefunds: [], startedAt: Date.now(), waiters: [], driving: true,
+      vars: {}, step: 0, state: 'created', inDoubt: false, cancelRequested: false, cancelSent: false, refunds: [], pendingRefunds: [], refundSeq: 0, startedAt: Date.now(), waiters: [], driving: true,
     };
     this.txs.set(key(posId, reference), tx);
     this.activeByPos.set(posId, reference);
@@ -210,8 +212,10 @@ export class Engine {
     if (tx.state !== 'authorized') throw new MeridianError('not_refundable', 'Seul un paiement autorisé peut être remboursé', 400);
     assertAmount(amount, tx.currency);
     // Remboursement pré-journalisé : une demande en vol est rejouée avec le même n, jamais doublée.
+    // Sans refundNumber explicite, un remboursement en vol (réponse perdue) est repris plutôt qu'un
+    // nouveau n attribué — sinon le retry naïf débiterait une seconde fois.
     const run = async (): Promise<PaymentView> => {
-      const n = refundNumber ?? tx.refunds.length + tx.pendingRefunds.length + 1;
+      const n = refundNumber ?? tx.pendingRefunds.at(-1)?.n ?? tx.refundSeq + 1;
       const confirmed = tx.refunds.find((r) => r.n === n);
       if (confirmed) {
         if (confirmed.amount !== amount) throw new MeridianError('refund_conflict', `Le remboursement n°${n} existe avec un autre montant`, 409);
@@ -219,6 +223,10 @@ export class Engine {
       }
       const pending = tx.pendingRefunds.find((r) => r.n === n);
       if (pending && pending.amount !== amount) throw new MeridianError('refund_conflict', `Le remboursement n°${n} existe avec un autre montant`, 409);
+      const rt = this.runtime(tx);
+      if (pending && !rt.canReplaySafely) {
+        throw new MeridianError('refund_unknown', 'Issue inconnue et PSP sans idempotence : vérifiez le remboursement chez le PSP avant toute nouvelle demande', 503);
+      }
       if (!pending) {
         try {
           await this.o.journal.append({ posId, reference, type: 'refund_pending', data: { n, amount } }, { refundCap: tx.amount });
@@ -229,8 +237,8 @@ export class Engine {
           throw e;
         }
         tx.pendingRefunds.push({ n, amount });
+        tx.refundSeq = Math.max(tx.refundSeq, n);
       }
-      const rt = this.runtime(tx);
       try {
         await rt.refund(this.ctx(tx), tx.vars, amount, n, tx.receipt);
       } catch (e) {
@@ -321,7 +329,7 @@ export class Engine {
       binding: bindingOf(routing, d.module) ?? { moduleId: d.module, config: {} },
       fallback: routing?.fallback?.moduleId === d.module ? undefined : routing?.fallback,
       usingFallback: false, inDoubt: true, vars: {}, step: 0, state: 'pending', cancelRequested: false, cancelSent: false,
-      refunds: [], pendingRefunds: [], startedAt: Date.parse(created.ts), waiters: [], driving: false,
+      refunds: [], pendingRefunds: [], refundSeq: 0, startedAt: Date.parse(created.ts), waiters: [], driving: false,
     };
     for (const e of list) {
       if (e.type === 'step') {
@@ -334,12 +342,15 @@ export class Engine {
       else if (e.type === 'cancel_sent' || e.type === 'cancel_refused') tx.cancelSent = true;
       else if (e.type === 'refund') {
         const r = e.data as { n: number; amount: number };
+        tx.refundSeq = Math.max(tx.refundSeq, r.n);
         tx.pendingRefunds = tx.pendingRefunds.filter((x) => x.n !== r.n);
         if (!tx.refunds.some((x) => x.n === r.n)) tx.refunds.push(r);
       } else if (e.type === 'refund_pending') {
         const r = e.data as { n: number; amount: number };
+        tx.refundSeq = Math.max(tx.refundSeq, r.n);
         if (!tx.pendingRefunds.some((x) => x.n === r.n) && !tx.refunds.some((x) => x.n === r.n)) tx.pendingRefunds.push(r);
       } else if (e.type === 'refund_failed') {
+        tx.refundSeq = Math.max(tx.refundSeq, (e.data as { n: number }).n);
         tx.pendingRefunds = tx.pendingRefunds.filter((x) => x.n !== (e.data as { n: number }).n);
       } else if (e.type === 'final') {
         const f = e.data as { state: FinalState; detail?: string; receipt?: Record<string, unknown> };

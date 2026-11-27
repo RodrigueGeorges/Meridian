@@ -64,4 +64,8 @@ const { app } = await buildServer({
 });
 await app.listen({ port: Number(env.PORT ?? 8080), host: '0.0.0.0' });
 console.log(JSON.stringify({ event: 'boot', persistent: Boolean(env.DATABASE_URL || env.JOURNAL_FILE), demoSeed: env.DEMO_SEED === 'true', bridges: Boolean(env.CONCERT_PORT || env.ZVT_PORT), version: API_VERSION }));
-for (const sig of ['SIGTERM', 'SIGINT'] as const) process.on(sig, () => void app.close().then(() => process.exit(0)));
+for (const sig of ['SIGTERM', 'SIGINT'] as const) process.on(sig, () => {
+  // Dernier recours : un drain qui pendrait (socket oubliée) ne doit pas empêcher de mourir.
+  setTimeout(() => process.exit(1), 27_000).unref();
+  void app.close().then(() => process.exit(0));
+});
