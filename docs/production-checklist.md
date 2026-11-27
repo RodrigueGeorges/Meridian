@@ -3,6 +3,19 @@
 Ce qui est fait dans le code (lots 1 et 2) et ce qui reste à faire avec des accès externes.
 ADR des choix : `docs/adr/002-production-readiness.md`.
 
+## Mise en ligne en une commande
+
+```bash
+fly auth login            # une fois (flyctl : https://fly.io/docs/flyctl/install/)
+./tools/go-live.sh        # app + PostgreSQL géré + secrets + déploiement + test de fumée
+```
+
+Le script est idempotent, provisionne un Managed Postgres `Basic` à Paris (sauvegardes incluses),
+génère `JOURNAL_KEY`, `MASTER_KEY`, `BOOTSTRAP_API_KEY` (`mk_live_` aléatoire) dans `.secrets-prod.txt`
+(chmod 600 — à ranger dans un coffre puis supprimer) et finit par `fly scale count 2`.
+Variables : `APP`, `REGION`, `DB_NAME`, `DB_PLAN`, `SCALE`, `PUBLIC_URL`, `DATABASE_URL` (base externe,
+connexion directe uniquement), `SKIP_DB=1`.
+
 ## Déjà fait (code)
 
 - Gardes d'ajout atomiques : création par référence unique, verrou transactionnel sur le journal,
@@ -31,13 +44,15 @@ ADR des choix : `docs/adr/002-production-readiness.md`.
 
 ## À faire avec vos accès
 
-1. **PostgreSQL managée UE** : région Paris + réplique + PITR (voir `infra/postgres-eu.md`).
+Les points 1 à 3 sont couverts par `./tools/go-live.sh` ; le reste reste manuel.
+
+1. **PostgreSQL managée UE** : `fly mpg create` (le script) ou base externe — région Paris + réplique + PITR (voir `infra/postgres-eu.md`).
    Connexion **directe** obligatoire (pas de pooler en mode transaction : les verrous consultatifs
    de session l'exigent) — port direct 5432, hôte sans `-pooler`.
 2. **Secrets Fly** : `fly secrets set --config infra/fly/api.prod.toml DATABASE_URL=… JOURNAL_KEY=$(openssl rand -hex 32) MASTER_KEY=$(openssl rand -hex 32) BOOTSTRAP_API_KEY=mk_live_$(openssl rand -hex 16) PUBLIC_URL=https://<domaine>`.
    Noter `JOURNAL_KEY_ID` et `MASTER_KEY_VERSION` courants pour les futures rotations.
 3. **PUBLIC_URL** : domaine définitif en https (sinon les URL absolues du site suivent l'en-tête Host).
-4. **Pages légales** : compléter les `[[…]]` dans `apps/portal/content/` :
+4. **Pages légales** : compléter les `[[…]]` restants dans `apps/portal/content/` (hébergeur, DPF, base de données et e-mails déjà remplis — il ne manque que les champs de la société) :
    `legal.fr.html`, `legal.en.html`, `privacy.fr.html`, `privacy.en.html`, `security.fr.html`,
    `security.en.html` (et `developers.fr/en.html`, `stripe.fr/en.html` qui contiennent aussi des
    placeholders de validation).
