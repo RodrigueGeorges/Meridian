@@ -82,6 +82,19 @@ describe.skipIf(!baseUrl)('Cluster PostgreSQL : deux instances d’API', () => {
     expect(sims.debits() - before).toBe(1);
   });
 
+  it('deux paiements différents en même temps sur le même terminal : un seul passe (terminal_busy atomique)', async () => {
+    sims.stripe.faults.autoPresentMs = 1500;
+    const ref = (s: string) => `CL-BUSY-${s}-${Date.now()}`;
+    const mk = (reference: string) => ({ posId: 'pos_demo_NL', reference, amount: 300, currency: 'EUR' });
+    const [a, b] = await Promise.all([call(0, 'POST', '/v1/payments', mk(ref('A'))), call(1, 'POST', '/v1/payments', mk(ref('B')))]);
+    expect([a.status, b.status].sort()).toEqual([201, 409]);
+    expect((a.status === 409 ? a : b).json.error.code).toBe('terminal_busy');
+    const winner = (a.status === 201 ? a : b).json.reference as string;
+    const fin = await call(1, 'GET', `/v1/payments/${winner}?posId=pos_demo_NL&waitMs=8000`);
+    expect(fin.json.state).toBe('authorized');
+    sims.stripe.faults.autoPresentMs = 150;
+  });
+
   it('annulation demandée sur B, appliquée par A qui pilote', async () => {
     sims.stripe.faults.autoPresentMs = null;
     const ref = `CL-3-${Date.now()}`;

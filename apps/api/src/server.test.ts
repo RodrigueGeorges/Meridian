@@ -1,5 +1,5 @@
 // Bout en bout : SDK → API → moteur → simulateurs. En mémoire, puis sur PostgreSQL si DATABASE_URL est défini.
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { Meridian, MeridianApiError } from '../../../packages/sdk-js/src/index.ts';
 import { startSims } from '@meridian/sim';
 import { pg } from '@meridian/store-pg';
@@ -160,6 +160,71 @@ for (const mode of ['memory', 'postgres'] as const) {
       expect(out).toContain('AuthorizedAmount="7.5"');
     });
 
+    it('deux paiements différents en même temps sur le même terminal : un seul passe (terminal_busy)', async () => {
+      const h = { authorization: `Bearer ${KEY}`, 'content-type': 'application/json' };
+      const [a, b] = await Promise.all([
+        fetch(`${base}/v1/payments`, { method: 'POST', headers: h, body: JSON.stringify({ posId: 'pos_demo_FR', reference: `BUSY-A-${mode}-${Date.now()}`, amount: 100, currency: 'EUR' }) }),
+        fetch(`${base}/v1/payments`, { method: 'POST', headers: h, body: JSON.stringify({ posId: 'pos_demo_FR', reference: `BUSY-B-${mode}-${Date.now()}`, amount: 100, currency: 'EUR' }) }),
+      ]);
+      expect([a.status, b.status].sort()).toEqual([201, 409]);
+      const ko = a.status === 409 ? a : b;
+      expect((await ko.json()).error.code).toBe('terminal_busy');
+      const winner = a.status === 201 ? await a.json() : await b.json();
+      const m = new Meridian({ apiKey: KEY, posId: 'pos_demo_FR', baseUrl: base });
+      expect((await m.waitForFinal(winner.reference, { timeoutMs: 10_000 })).state).toBe('authorized');
+    });
+
+    it('remboursements concurrents plafonnés : un seul passe ; rejeu après réponse perdue sans double', async () => {
+      const m = new Meridian({ apiKey: KEY, posId: 'pos_demo_BE', baseUrl: base, retries: 0 });
+      const ref = `CAP-${mode}-${Date.now()}`;
+      await m.pay({ reference: ref, amount: 1000, currency: 'EUR', waitMs: 5000 });
+      // Montant remboursé chez le PSP qui a encaissé (Stripe peut être arrêté par le test de bascule).
+      const pspRefunded = (r: string) =>
+        ([...sims.stripe.state.intents.values()].find((x) => x.metadata.meridian_ref === r)?.amount_refunded ?? 0)
+        + ([...sims.secours.state.checkouts.values()].find((c) => c.reference === r)?.refunded ?? 0);
+      const res = await Promise.allSettled([
+        m.refund(ref, { amount: 600, refundNumber: 1 }),
+        m.refund(ref, { amount: 600, refundNumber: 2 }),
+      ]);
+      expect(res.filter((x) => x.status === 'fulfilled').length).toBe(1);
+      const ko = res.find((x) => x.status === 'rejected') as PromiseRejectedResult;
+      expect(ko.reason).toMatchObject({ status: 400, code: 'refund_exceeds_amount' });
+      await new Promise((r) => setTimeout(r, 300));
+      expect(pspRefunded(ref)).toBe(600);
+      // Réponse perdue : le remboursement est traité chez le PSP, la reprise avec le même n ne double pas.
+      const which = [...sims.stripe.state.intents.values()].some((x) => x.metadata.meridian_ref === ref) ? sims.stripe : sims.secours;
+      which.faults.dropResponse = { '/v1/refunds': 1, '/refunds': 1 };
+      await expect(m.refund(ref, { amount: 200, refundNumber: 3 })).rejects.toMatchObject({ status: 503, code: 'refund_pending' });
+      which.faults.dropResponse = {};
+      const v = await m.refund(ref, { amount: 200, refundNumber: 3 });
+      expect(v.refunded).toBe(800);
+      expect(pspRefunded(ref)).toBe(800);
+      // Montant différent pour le même n : conflit.
+      await expect(m.refund(ref, { amount: 250, refundNumber: 3 })).rejects.toMatchObject({ status: 409, code: 'refund_conflict' });
+    });
+
+    it('montant au-delà du plafond : refusé avant tout envoi', async () => {
+      const m = new Meridian({ apiKey: KEY, posId: 'pos_demo_DE', baseUrl: base, retries: 0 });
+      await expect(m.pay({ reference: `MAX-${mode}-${Date.now()}`, amount: 100_000_000, currency: 'EUR' }))
+        .rejects.toMatchObject({ status: 400, code: 'invalid_request' });
+      const ref = `MAXOK-${mode}-${Date.now()}`;
+      await m.pay({ reference: ref, amount: 99_999_999, currency: 'EUR' });
+      expect((await m.waitForFinal(ref, { timeoutMs: 10_000 })).state).toBe('authorized');
+    });
+
+    it('santé : /health léger ne lit pas le journal et expose les compteurs du moteur', async () => {
+      const spy = vi.spyOn(server.store, 'all');
+      spy.mockClear();
+      const r = await fetch(`${base}/health`);
+      expect(r.status).toBe(200);
+      const h = await r.json();
+      expect(h).toMatchObject({ ok: true, persistent: mode === 'postgres', pending: expect.any(Number), stuck: expect.any(Number) });
+      if (mode === 'postgres') expect(h.db).toBe(true);
+      expect(h.journal).toBeUndefined();
+      expect(spy).not.toHaveBeenCalled();
+      spy.mockRestore();
+    });
+
     it('journal intact et, sur PostgreSQL, non modifiable', async () => {
       const v = await (await fetch(`${base}/v1/journal/verify`, { headers: { authorization: `Bearer ${KEY}` } })).json();
       expect(v.ok).toBe(true);
@@ -247,3 +312,12 @@ for (const mode of ['memory', 'postgres'] as const) {
     });
   });
 }
+
+describe('garde pooler en mode transaction', () => {
+  const opts = (databaseUrl: string) => ({ databaseUrl, journalKey: 'pooler-key-0123456789abcdef', masterKey: 'pooler-master-key-0123456789abcdef' });
+  it('refuse les URL de pooler sans contournement explicite', async () => {
+    await expect(buildServer(opts('postgres://u:x@ep-a-pooler.eu-west-2.aws.neon.tech/db'))).rejects.toThrow(/connexion directe/);
+    await expect(buildServer(opts('postgres://u:x@db.ref.supabase.co:6543/postgres'))).rejects.toThrow(/connexion directe/);
+    await expect(buildServer(opts('postgres://u:x@hôte:5432/db?pgbouncer=true'))).rejects.toThrow(/connexion directe/);
+  });
+});

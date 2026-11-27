@@ -12,10 +12,13 @@ export const CURRENCIES = {
 export type Currency = keyof typeof CURRENCIES;
 export const isCurrency = (c: string): c is Currency => c in CURRENCIES;
 
+/** Plafond de montant (unités mineures) : au-delà, le montant est refusé avant tout envoi au PSP. */
+export const MAX_AMOUNT = 99_999_999;
+
 export function assertAmount(amount: unknown, currency: string): asserts amount is number {
   if (!isCurrency(currency)) throw new MeridianError('unsupported_currency', `Devise non prise en charge : ${currency}`, 400);
-  if (typeof amount !== 'number' || !Number.isInteger(amount) || amount <= 0) {
-    throw new MeridianError('invalid_amount', 'Le montant doit être un entier strictement positif en unités mineures', 400);
+  if (typeof amount !== 'number' || !Number.isInteger(amount) || amount <= 0 || amount > MAX_AMOUNT) {
+    throw new MeridianError('invalid_amount', 'Le montant doit être un entier positif en unités mineures, au plus 99999999', 400);
   }
 }
 
@@ -65,7 +68,7 @@ export class MeridianError extends Error {
 // ---------- Journal ----------
 export type JournalType =
   | 'created' | 'step' | 'network_error' | 'fallback' | 'cancel_requested' | 'cancel_sent'
-  | 'cancel_refused' | 'recovered' | 'final' | 'refund' | 'activate';
+  | 'cancel_refused' | 'recovered' | 'final' | 'refund' | 'refund_pending' | 'refund_failed' | 'activate';
 
 export interface JournalEntryInput {
   posId: string;

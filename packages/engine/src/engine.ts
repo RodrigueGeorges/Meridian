@@ -64,6 +64,10 @@ interface Tx {
   cancelRequested: boolean;
   cancelSent: boolean;
   refunds: { n: number; amount: number }[];
+  /** Remboursements pré-journalisés, envoyés au PSP sans confirmation ni échec définitif. */
+  pendingRefunds: { n: number; amount: number }[];
+  /** Sérialise les remboursements de ce paiement dans l'instance. */
+  refundTail?: Promise<unknown>;
   receipt?: Record<string, unknown>;
   final?: JournalEntry;
   startedAt: number;
@@ -71,10 +75,16 @@ interface Tx {
   waiters: (() => void)[];
   /** Vrai si cette instance pilote le paiement. */
   driving: boolean;
+  /** Génération du client de verrous au moment du claim : si elle change, le verrou est perdu. */
+  claimEpoch?: number;
+  /** Signalé « bloqué » (une seule fois) : paiement sans issue au-delà de stuckAfterMs. */
+  stuck?: boolean;
 }
 
 /** Coordination multi-instance (PostgreSQL) : un seul pilote par paiement, état partagé via le journal. */
 export interface Cluster {
+  /** Génération du client de verrous : incrémentée quand la connexion tenant les verrous est perdue. */
+  epoch: number;
   tryClaim(posId: string, reference: string): Promise<boolean>;
   release(posId: string, reference: string): Promise<void>;
   activeOnPos(posId: string): Promise<string | undefined>;
@@ -98,6 +108,8 @@ export interface EngineOptions extends EngineEvents {
   httpTimeoutMs?: number;
   fetcher?: Fetcher;
   cluster?: Cluster;
+  /** Paiement piloté sans issue au-delà de ce délai : journalisé « payment_stuck » une fois. */
+  stuckAfterMs?: number;
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -111,11 +123,13 @@ export class Engine {
   private readonly pollMs: number;
   private readonly retryMs: number;
   private readonly payTimeoutMs: number;
+  private readonly stuckAfterMs: number;
 
   constructor(private readonly o: EngineOptions) {
     this.pollMs = o.pollMs ?? 500;
     this.retryMs = o.retryMs ?? 800;
     this.payTimeoutMs = o.payTimeoutMs ?? 90_000;
+    this.stuckAfterMs = o.stuckAfterMs ?? 600_000;
   }
 
   // ---------------- API publique (5 appels) ----------------
@@ -141,17 +155,20 @@ export class Engine {
 
     const tx: Tx = {
       posId, reference, amount, currency: currency as Currency, binding: routing.primary, fallback: routing.fallback, usingFallback: false,
-      vars: {}, step: 0, state: 'created', inDoubt: false, cancelRequested: false, cancelSent: false, refunds: [], startedAt: Date.now(), waiters: [], driving: true,
+      vars: {}, step: 0, state: 'created', inDoubt: false, cancelRequested: false, cancelSent: false, refunds: [], pendingRefunds: [], startedAt: Date.now(), waiters: [], driving: true,
     };
     this.txs.set(key(posId, reference), tx);
     this.activeByPos.set(posId, reference);
     try {
-      await this.o.journal.append({ posId, reference, type: 'created', data: { amount, currency, module: tx.binding.moduleId, country: routing.country } });
+      // Garde atomique : un seul paiement sans issue par terminal, même en cas de course entre instances.
+      await this.o.journal.append({ posId, reference, type: 'created', data: { amount, currency, module: tx.binding.moduleId, country: routing.country } }, { posIdle: true });
     } catch (e) {
       this.txs.delete(key(posId, reference));
       this.activeByPos.delete(posId);
+      const code = (e as { code?: string }).code;
       // Course entre instances : une autre a créé ce paiement juste avant (index unique en base).
-      if ((e as { code?: string }).code === '23505') return same(await this.fresh(posId, reference));
+      if (code === '23505') return same(await this.fresh(posId, reference));
+      if (code === 'terminal_busy') throw new MeridianError('terminal_busy', (e as Error).message, 409);
       throw e;
     }
     tx.state = 'pending';
@@ -192,26 +209,46 @@ export class Engine {
     const tx = await this.fresh(posId, reference);
     if (tx.state !== 'authorized') throw new MeridianError('not_refundable', 'Seul un paiement autorisé peut être remboursé', 400);
     assertAmount(amount, tx.currency);
-    const n = refundNumber ?? tx.refunds.length + 1;
-    const already = tx.refunds.find((r) => r.n === n);
-    if (already) {
-      if (already.amount !== amount) throw new MeridianError('refund_conflict', `Le remboursement n°${n} existe avec un autre montant`, 409);
+    // Remboursement pré-journalisé : une demande en vol est rejouée avec le même n, jamais doublée.
+    const run = async (): Promise<PaymentView> => {
+      const n = refundNumber ?? tx.refunds.length + tx.pendingRefunds.length + 1;
+      const confirmed = tx.refunds.find((r) => r.n === n);
+      if (confirmed) {
+        if (confirmed.amount !== amount) throw new MeridianError('refund_conflict', `Le remboursement n°${n} existe avec un autre montant`, 409);
+        return this.view(tx);
+      }
+      const pending = tx.pendingRefunds.find((r) => r.n === n);
+      if (pending && pending.amount !== amount) throw new MeridianError('refund_conflict', `Le remboursement n°${n} existe avec un autre montant`, 409);
+      if (!pending) {
+        try {
+          await this.o.journal.append({ posId, reference, type: 'refund_pending', data: { n, amount } }, { refundCap: tx.amount });
+        } catch (e) {
+          if ((e as { code?: string }).code === 'refund_exceeds_amount') {
+            throw new MeridianError('refund_exceeds_amount', 'Le cumul des remboursements dépasse le montant payé', 400);
+          }
+          throw e;
+        }
+        tx.pendingRefunds.push({ n, amount });
+      }
+      const rt = this.runtime(tx);
+      try {
+        await rt.refund(this.ctx(tx), tx.vars, amount, n, tx.receipt);
+      } catch (e) {
+        if (e instanceof NetError && !rt.canReplaySafely) throw new MeridianError('refund_unknown', 'Issue inconnue et PSP sans idempotence : vérifiez le remboursement chez le PSP avant toute nouvelle demande', 503);
+        if (e instanceof NetError) throw new MeridianError('refund_pending', 'Issue inconnue : renvoyez la même demande avec le même refundNumber', 503);
+        await this.o.journal.append({ posId, reference, type: 'refund_failed', data: { n, reason: (e as Error).message } });
+        tx.pendingRefunds = tx.pendingRefunds.filter((r) => r.n !== n);
+        throw new MeridianError('refund_failed', (e as Error).message, 502);
+      }
+      tx.pendingRefunds = tx.pendingRefunds.filter((r) => r.n !== n);
+      tx.refunds.push({ n, amount });
+      await this.o.journal.append({ posId, reference, type: 'refund', data: { n, amount } });
+      this.o.onRefund?.(this.view(tx), amount);
       return this.view(tx);
-    }
-    const total = tx.refunds.reduce((s, r) => s + r.amount, 0);
-    if (total + amount > tx.amount) throw new MeridianError('refund_exceeds_amount', 'Le cumul des remboursements dépasse le montant payé', 400);
-    const rt = this.runtime(tx);
-    try {
-      await rt.refund(this.ctx(tx), tx.vars, amount, n, tx.receipt);
-    } catch (e) {
-      if (e instanceof NetError && !rt.canReplaySafely) throw new MeridianError('refund_unknown', 'Issue inconnue et PSP sans idempotence : vérifiez le remboursement chez le PSP avant toute nouvelle demande', 503);
-      if (e instanceof NetError) throw new MeridianError('refund_pending', 'Issue inconnue : renvoyez la même demande avec le même refundNumber', 503);
-      throw new MeridianError('refund_failed', (e as Error).message, 502);
-    }
-    tx.refunds.push({ n, amount });
-    await this.o.journal.append({ posId, reference, type: 'refund', data: { n, amount } });
-    this.o.onRefund?.(this.view(tx), amount);
-    return this.view(tx);
+    };
+    const p = (tx.refundTail ?? Promise.resolve()).then(run, run);
+    tx.refundTail = p.catch(() => undefined);
+    return p;
   }
 
   /**
@@ -284,7 +321,7 @@ export class Engine {
       binding: bindingOf(routing, d.module) ?? { moduleId: d.module, config: {} },
       fallback: routing?.fallback?.moduleId === d.module ? undefined : routing?.fallback,
       usingFallback: false, inDoubt: true, vars: {}, step: 0, state: 'pending', cancelRequested: false, cancelSent: false,
-      refunds: [], startedAt: Date.parse(created.ts), waiters: [], driving: false,
+      refunds: [], pendingRefunds: [], startedAt: Date.parse(created.ts), waiters: [], driving: false,
     };
     for (const e of list) {
       if (e.type === 'step') {
@@ -297,7 +334,13 @@ export class Engine {
       else if (e.type === 'cancel_sent' || e.type === 'cancel_refused') tx.cancelSent = true;
       else if (e.type === 'refund') {
         const r = e.data as { n: number; amount: number };
+        tx.pendingRefunds = tx.pendingRefunds.filter((x) => x.n !== r.n);
         if (!tx.refunds.some((x) => x.n === r.n)) tx.refunds.push(r);
+      } else if (e.type === 'refund_pending') {
+        const r = e.data as { n: number; amount: number };
+        if (!tx.pendingRefunds.some((x) => x.n === r.n) && !tx.refunds.some((x) => x.n === r.n)) tx.pendingRefunds.push(r);
+      } else if (e.type === 'refund_failed') {
+        tx.pendingRefunds = tx.pendingRefunds.filter((x) => x.n !== (e.data as { n: number }).n);
       } else if (e.type === 'final') {
         const f = e.data as { state: FinalState; detail?: string; receipt?: Record<string, unknown> };
         tx.state = f.state; tx.detail = f.detail ?? undefined; tx.receipt = f.receipt ?? undefined; tx.final = e;
@@ -377,6 +420,11 @@ export class Engine {
   async idle(): Promise<void> {
     await Promise.all([...this.txs.values()].map((t) => t.done));
   }
+  /** Paiements non terminés connus de cette instance, dont ceux signalés « bloqués ». */
+  stats(): { pending: number; stuck: number } {
+    const open = [...this.txs.values()].filter((t) => !isFinal(t.state));
+    return { pending: open.length, stuck: open.filter((t) => t.stuck).length };
+  }
   verify() {
     return this.o.journal.verify();
   }
@@ -385,8 +433,22 @@ export class Engine {
 
   private async safeDrive(tx: Tx, recovered: boolean): Promise<void> {
     const cluster = this.o.cluster;
-    if (cluster && !(await cluster.tryClaim(tx.posId, tx.reference))) {
-      tx.driving = false; // une autre instance pilote déjà ce paiement
+    try {
+      if (cluster) {
+        // Le claim peut échouer sur une erreur de connexion : on ne pilote pas, le scanner réessaiera.
+        const claimed = await cluster.tryClaim(tx.posId, tx.reference).catch((e) => {
+          console.error(JSON.stringify({ level: 'error', event: 'claim_failed', posId: tx.posId, reference: tx.reference, error: (e as Error).message }));
+          return false;
+        });
+        if (!claimed) {
+          tx.driving = false; // une autre instance pilote déjà ce paiement (ou le claim a échoué)
+          return;
+        }
+        tx.claimEpoch = cluster.epoch;
+      }
+    } catch (e) {
+      console.error(JSON.stringify({ level: 'error', event: 'claim_failed', posId: tx.posId, reference: tx.reference, error: (e as Error).message }));
+      tx.driving = false;
       return;
     }
     tx.driving = true;
@@ -408,6 +470,22 @@ export class Engine {
     }
   }
 
+  /** Le client tenant les verrous consultatifs a été remplacé : nos verrous sont morts, on ne pilote plus. */
+  private lockLost(tx: Tx): boolean {
+    const lost = !!this.o.cluster && tx.claimEpoch !== undefined && tx.claimEpoch !== this.o.cluster.epoch;
+    if (lost) {
+      console.error(JSON.stringify({ level: 'error', event: 'lock_lost', posId: tx.posId, reference: tx.reference, step: tx.step }));
+      tx.driving = false;
+    }
+    return lost;
+  }
+
+  private checkStuck(tx: Tx): void {
+    if (tx.stuck || isFinal(tx.state) || Date.now() - tx.startedAt <= this.stuckAfterMs) return;
+    console.error(JSON.stringify({ level: 'error', event: 'payment_stuck', posId: tx.posId, reference: tx.reference, step: tx.step, inDoubt: tx.inDoubt, ageMs: Date.now() - tx.startedAt }));
+    tx.stuck = true;
+  }
+
   private async drive(tx: Tx): Promise<void> {
     const deadline = () => tx.startedAt + this.payTimeoutMs;
     let netStreak = false;
@@ -419,6 +497,8 @@ export class Engine {
 
     // Phase 1 : étapes du module
     while (this.alive && tx.step < this.runtime(tx).steps.length) {
+      if (this.lockLost(tx)) return; // verrous perdus : on s'arrête sans finaliser, le scanner reprendra
+      this.checkStuck(tx);
       if (tx.cancelRequested && tx.step === 0) return this.finish(tx, 'cancelled', 'cancelled_before_send', {});
       const rt = this.runtime(tx);
       // PSP sans clé d'idempotence : une étape peut-être reçue n'est renvoyée qu'après avoir vérifié qu'elle ne l'a pas été.
@@ -478,6 +558,8 @@ export class Engine {
 
     // Phase 2 : suivi jusqu'à l'issue réelle
     while (this.alive) {
+      if (this.lockLost(tx)) return;
+      this.checkStuck(tx);
       const rt = this.runtime(tx);
       if (!tx.cancelRequested && this.o.cluster) {
         const entries = await this.o.journal.byReference(tx.posId, tx.reference);

@@ -13,7 +13,7 @@ import { MIN_SAMPLE, StatusBoard } from './status.ts';
 import { EdgeRelay } from './edge.ts';
 import fastifyWebsocket from '@fastify/websocket';
 import { z, ZodError } from 'zod';
-import { COUNTRIES, isCurrency, MeridianError, type Currency } from '@meridian/core';
+import { COUNTRIES, isCurrency, MAX_AMOUNT, MeridianError, type Currency } from '@meridian/core';
 import { Engine, Journal, JsonlStore, MemoryStore, type JournalStore, type PaymentView } from '@meridian/engine';
 import { BUILTIN_MODULES, ModuleRuntime } from '@meridian/modules';
 import { createConcertServer, createZvtServer, engineTarget, handleNexo, nexoFromXml, nexoToXml } from '@meridian/bridges';
@@ -22,15 +22,25 @@ import { MemoryPosRepo, PgCluster, PgJournalStore, PgPosRepo, SecretBox, migrate
 
 export interface ServerOptions {
   databaseUrl?: string;
+  /** Accepte explicitement un pooler en mode transaction (verrous consultatifs impossibles, à éviter). */
+  allowPooledDatabase?: boolean;
   journalFile?: string;
   journalKey: string;
+  /** Identifiant de la clé de signature courante (défaut '1') et clés retirées (« kid → clé »). */
+  journalKeyId?: string;
+  journalKeysPrevious?: Record<string, string>;
   masterKey: string;
+  /** Version de la clé de chiffrement des secrets (défaut 1) et clés retirées (« version → clé »). */
+  masterKeyVersion?: number;
+  masterKeysPrevious?: Record<number, string>;
   bootstrapKey?: string;
   allowTestBaseUrl?: boolean;
   webhookUrl?: string;
   webhookSecret?: string;
+  /** Délai maximal d'attente des paiements en cours à l'arrêt (défaut 20 s). */
+  drainMs?: number;
   demoSeed?: { stripeUrl: string; secoursUrl: string };
-  engine?: { pollMs?: number; retryMs?: number; payTimeoutMs?: number; scanMs?: number; httpTimeoutMs?: number };
+  engine?: { pollMs?: number; retryMs?: number; payTimeoutMs?: number; scanMs?: number; httpTimeoutMs?: number; stuckAfterMs?: number };
   logger?: boolean;
   /** Derrière un proxy (Fly) : lire l'IP client dans X-Forwarded-For. Ne jamais activer sans proxy de confiance. */
   trustProxy?: boolean;
@@ -84,11 +94,18 @@ export async function buildServer(o: ServerOptions) {
   let pool: pg.Pool | undefined;
   let cluster: PgCluster | undefined;
   if (o.databaseUrl) {
+    // Les verrous consultatifs de session (pilote unique, migrations) exigent une connexion directe :
+    // un pooler en mode transaction les rend non fiables. Refus par défaut, contournement explicite.
+    const u = new URL(o.databaseUrl);
+    const pooled = u.hostname.includes('-pooler') || u.port === '6543' || u.searchParams.get('pgbouncer') === 'true';
+    if (pooled && !o.allowPooledDatabase) {
+      throw new Error('DATABASE_URL ressemble à un pooler en mode transaction (-pooler, port 6543 ou pgbouncer=true) : les verrous consultatifs de session exigent une connexion directe. Utilisez l\'URL directe ou définissez DATABASE_POOLED_OK=true pour forcer.');
+    }
     pool = new pg.Pool({ connectionString: o.databaseUrl });
     await migrate(pool);
     store = new PgJournalStore(pool);
     cluster = new PgCluster(pool);
-    repo = new PgPosRepo(pool, new SecretBox(o.masterKey));
+    repo = new PgPosRepo(pool, new SecretBox(o.masterKey, { version: o.masterKeyVersion, previous: o.masterKeysPrevious }));
     const p = pool;
     keys = {
       async find(hash) {
@@ -172,7 +189,7 @@ export async function buildServer(o: ServerOptions) {
 
   // ---------- Moteur ----------
   const engine = new Engine({
-    journal: new Journal(store, o.journalKey),
+    journal: new Journal(store, o.journalKey, { keyId: o.journalKeyId, previous: o.journalKeysPrevious }),
     modules: BUILTIN_MODULES,
     routing: (posId) => repo.routing(posId),
     cluster,
@@ -341,7 +358,17 @@ export async function buildServer(o: ServerOptions) {
   });
 
   // ---------- Routes publiques ----------
-  app.get('/health', async () => ({ ok: true, journal: (await engine.verify()).ok }));
+  // Santé légère : pas de lecture du journal. Avec base, un SELECT 1 borné (2 s) ; 503 si la DB ne répond pas.
+  app.get('/health', async (_req, reply) => {
+    const stats = engine.stats();
+    if (!pool) return { ok: true, persistent: Boolean(o.journalFile), ...stats };
+    const probe = await Promise.race([
+      pool.query('SELECT 1').then(() => true).catch(() => false),
+      new Promise<boolean>((r) => setTimeout(() => r(false), 2000)),
+    ]);
+    if (!probe) return reply.code(503).send({ ok: false, persistent: true, db: false, ...stats });
+    return { ok: true, persistent: true, db: true, ...stats };
+  });
   app.get('/v1/modules', async () => Object.values(BUILTIN_MODULES).map((m) => ({
     id: m.id, name: m.name, version: m.version, kind: m.kind, maturity: m.maturity, capabilities: m.capabilities,
     config: m.config.map((c) => ({ key: c.key, type: c.type, secret: c.secret, label: c.label })),
@@ -353,8 +380,10 @@ export async function buildServer(o: ServerOptions) {
   });
 
   // ---------- Paiements ----------
-  const PayBody = z.object({ posId: z.string(), reference: z.string().min(1).max(64), amount: z.number().int().positive(), currency: z.string().length(3), waitMs: z.number().int().min(0).max(120_000).optional() });
+  let closing = false;
+  const PayBody = z.object({ posId: z.string(), reference: z.string().min(1).max(64), amount: z.number().int().positive().max(MAX_AMOUNT), currency: z.string().length(3), waitMs: z.number().int().min(0).max(120_000).optional() });
   app.post('/v1/payments', async (req, reply) => {
+    if (closing) throw new MeridianError('shutting_down', 'Arrêt en cours, nouvelles demandes refusées', 503);
     const org = await auth(req);
     const b = PayBody.parse(req.body);
     await ownPos(org, b.posId);
@@ -385,7 +414,7 @@ export async function buildServer(o: ServerOptions) {
     await audit(req, org, 'payment.cancel_requested', reference, { posId });
     return engine.cancel(posId, reference);
   });
-  const RefundBody = z.object({ posId: z.string(), amount: z.number().int().positive(), refundNumber: z.number().int().positive().optional() });
+  const RefundBody = z.object({ posId: z.string(), amount: z.number().int().positive().max(MAX_AMOUNT), refundNumber: z.number().int().positive().optional() });
   app.post('/v1/payments/:reference/refunds', async (req) => {
     const org = await auth(req);
     const b = RefundBody.parse(req.body);
@@ -668,6 +697,8 @@ export async function buildServer(o: ServerOptions) {
   });
 
   app.addHook('onClose', async () => {
+    closing = true; // les nouveaux paiements sont refusés (503 shutting_down)
+    await Promise.race([engine.idle(), new Promise((r) => setTimeout(r, o.drainMs ?? 20_000))]);
     engine.kill();
     if (webhookTimer) clearInterval(webhookTimer);
     clearInterval(purgeTimer);

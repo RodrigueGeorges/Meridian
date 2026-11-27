@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assertAmount, formatAmount, COUNTRIES, LAUNCH_COUNTRIES } from '@meridian/core';
+import { assertAmount, formatAmount, COUNTRIES, LAUNCH_COUNTRIES, MeridianError } from '@meridian/core';
 import { BUILTIN_MODULES, matches, parseModule, render } from '@meridian/modules';
 import { canonical, Journal, MemoryStore } from './journal.ts';
 
@@ -8,6 +8,8 @@ describe('core', () => {
     expect(() => assertAmount(2450, 'EUR')).not.toThrow();
     expect(() => assertAmount(24.5, 'EUR')).toThrow();
     expect(() => assertAmount(0, 'EUR')).toThrow();
+    try { assertAmount(100_000_000, 'EUR'); expect.unreachable(); } catch (e) { expect((e as MeridianError).code).toBe('invalid_amount'); }
+    expect(() => assertAmount(99_999_999, 'EUR')).not.toThrow();
     expect(() => assertAmount(100, 'USD')).toThrow();
     expect(formatAmount(129000, 'CHF', 'de-CH')).toMatch(/1.290\.00/);
   });

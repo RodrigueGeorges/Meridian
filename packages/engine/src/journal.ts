@@ -3,13 +3,16 @@ import { createHash, createHmac } from 'node:crypto';
 import { appendFileSync, existsSync, fsyncSync, openSync, closeSync, readFileSync } from 'node:fs';
 import type { JournalEntry, JournalEntryInput } from '@meridian/core';
 
+/** Garde évaluée atomiquement avec l'ajout : le refus voyage avec l'entrée, pas en pré-vérification. */
+export type AppendGuard = { posIdle: true } | { refundCap: number };
+
 export interface JournalStore {
   append(entry: JournalEntry): Promise<void>;
   last(): Promise<JournalEntry | undefined>;
   all(): Promise<JournalEntry[]>;
   byReference(posId: string, reference: string): Promise<JournalEntry[]>;
   /** Stockage partagé (PostgreSQL) : construit et insère l'entrée sous verrou, à partir de la dernière en base. */
-  appendChained?(build: (last: JournalEntry | undefined) => JournalEntry): Promise<JournalEntry>;
+  appendChained?(build: (last: JournalEntry | undefined) => JournalEntry, guard?: AppendGuard): Promise<JournalEntry>;
 }
 
 export const GENESIS = '0'.repeat(64);
@@ -28,27 +31,70 @@ export function hashEntry(e: Omit<JournalEntry, 'hash' | 'sig'>): string {
     .digest('hex');
 }
 
+/**
+ * Évalue un garde d'ajout sur les entrées déjà journalisées.
+ * `posIdle` : refuse un `created` tant qu'un autre paiement du même terminal n'a pas d'entrée `final`.
+ * `refundCap` : cumul des remboursements de (posId, reference) — chaque n compté une fois
+ * (dernier état par n : refund_failed exclu, refund sinon refund_pending) — plus le montant demandé.
+ */
+export function checkGuard(entries: JournalEntry[], input: JournalEntryInput, guard: AppendGuard): void {
+  if ('posIdle' in guard) {
+    const active = [...entries].reverse().find(
+      (e) => e.type === 'created' && e.posId === input.posId && e.reference !== input.reference
+        && !entries.some((f) => f.type === 'final' && f.posId === e.posId && f.reference === e.reference),
+    );
+    if (active) {
+      throw Object.assign(new Error(`Un paiement est déjà en cours sur ce terminal (${active.reference})`), { code: 'terminal_busy', active: active.reference });
+    }
+    return;
+  }
+  const byN = new Map<number, { amount: number; failed: boolean }>();
+  for (const e of entries) {
+    if (e.posId !== input.posId || e.reference !== input.reference) continue;
+    const d = e.data as { n?: number; amount?: number };
+    if (typeof d.n !== 'number') continue;
+    if (e.type === 'refund_pending' || e.type === 'refund') byN.set(d.n, { amount: d.amount ?? 0, failed: false });
+    else if (e.type === 'refund_failed') byN.set(d.n, { amount: 0, failed: true });
+  }
+  const total = [...byN.values()].filter((x) => !x.failed).reduce((s, x) => s + x.amount, 0);
+  if (total + Number(input.data.amount ?? 0) > guard.refundCap) {
+    throw Object.assign(new Error('Le cumul des remboursements dépasse le montant payé'), { code: 'refund_exceeds_amount' });
+  }
+}
+
 export class Journal {
   private tail: Promise<unknown> = Promise.resolve();
   private head?: { seq: number; hash: string };
+  private readonly keyId: string;
+  private readonly previous: Record<string, string>;
 
-  constructor(private readonly store: JournalStore, private readonly key: string) {
+  constructor(private readonly store: JournalStore, private readonly key: string, opts: { keyId?: string; previous?: Record<string, string> } = {}) {
     if (!key || key.length < 16) throw new Error('JOURNAL_KEY trop courte (16 caractères minimum)');
+    this.keyId = opts.keyId ?? '1';
+    this.previous = opts.previous ?? {};
   }
 
+  /** kid '1' (ou absent) : signature historique, hex brut ; sinon « kid:hex » pour retrouver la clé à la vérification. */
   sign(hash: string): string {
-    return createHmac('sha256', this.key).update(hash).digest('hex');
+    const sig = createHmac('sha256', this.key).update(hash).digest('hex');
+    return this.keyId === '1' ? sig : `${this.keyId}:${sig}`;
+  }
+
+  private keyFor(kid: string): string | undefined {
+    if (kid === this.keyId) return this.key;
+    return this.previous[kid];
   }
 
   /** Ajout sérialisé : une seule écriture à la fois pour garder la chaîne cohérente. */
-  append(input: JournalEntryInput): Promise<JournalEntry> {
+  append(input: JournalEntryInput, guard?: AppendGuard): Promise<JournalEntry> {
     const build = (last: JournalEntry | undefined): JournalEntry => {
       const base = { ...input, seq: (last?.seq ?? 0) + 1, ts: new Date().toISOString(), prev: last?.hash ?? GENESIS };
       const hash = hashEntry(base);
       return { ...base, hash, sig: this.sign(hash) };
     };
-    if (this.store.appendChained) return this.store.appendChained(build);
+    if (this.store.appendChained) return this.store.appendChained(build, guard);
     const run = async () => {
+      if (guard) checkGuard(await this.store.all(), input, guard);
       if (!this.head) {
         const last = await this.store.last();
         this.head = last ? { seq: last.seq, hash: last.hash } : { seq: 0, hash: GENESIS };
@@ -77,7 +123,12 @@ export class Journal {
     let prev = GENESIS;
     for (const e of entries) {
       const { hash, sig, ...rest } = e;
-      if (e.prev !== prev || hashEntry(rest) !== hash || this.sign(hash) !== sig) return { ok: false, count: entries.length, brokenAt: e.seq };
+      // « kid:hex » : signature de la clé de ce kid ; hex brut : kid '1' (format historique).
+      const kid = sig.includes(':') ? sig.split(':', 1)[0]! : '1';
+      const raw = sig.includes(':') ? sig.slice(kid.length + 1) : sig;
+      const k = this.keyFor(kid);
+      const ok = !!k && createHmac('sha256', k).update(hash).digest('hex') === raw;
+      if (e.prev !== prev || hashEntry(rest) !== hash || !ok) return { ok: false, count: entries.length, brokenAt: e.seq };
       prev = hash;
     }
     return { ok: true, count: entries.length };
