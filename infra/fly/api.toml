@@ -32,18 +32,9 @@ primary_region = "cdg"
     path = "/health"
     timeout = "3s"
 
-# Passerelles caisse en TCP brut (réservé aux tests : en production, tunnel privé ou WireGuard côté magasin).
-[[services]]
-  internal_port = 8888
-  protocol = "tcp"
-  [[services.ports]]
-    port = 8888
-
-[[services]]
-  internal_port = 20007
-  protocol = "tcp"
-  [[services.ports]]
-    port = 20007
+# Passerelles caisse (Concert 8888, ZVT 20007) : jamais exposées sur Internet. Le code les lie déjà
+# sur 127.0.0.1 ; en production elles se configurent sur le réseau privé du magasin, derrière
+# l'agent edge ou un tunnel privé (WireGuard) — voir infra/fly/api.prod.toml et le README.
 
 # Multi-instance : fly scale count 2 --region cdg (coordination par PostgreSQL, rien d'autre à configurer).
 [[vm]]

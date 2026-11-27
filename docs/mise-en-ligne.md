@@ -1,6 +1,6 @@
 # Mise en ligne : les 4 actions qui demandent vos accès
 
-Tout le reste est fait et testé (54 tests, dont 2 instances sur une même base).
+Tout le reste est fait et testé (125 tests, dont 2 instances sur une même base).
 
 ## 1. GitHub
 ```bash

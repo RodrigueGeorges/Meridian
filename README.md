@@ -106,7 +106,7 @@ Un module nouveau porte `"maturity": "preview"` tant qu'il n'a pas passé les sc
 
 Démo : `pnpm demo`, puis `pnpm tpe 24.50 --local` ou `pnpm tpe 24.50 --cloud`. Agent réel : `pnpm edge` (variables dans `apps/edge/src/main.ts`).
 
-Le relais cloud tient les connexions des agents en mémoire de l'instance : en multi-instance, les agents doivent joindre l'instance qui reçoit les paiements de leur organisation (à traiter avant la mise à l'échelle).
+Le relais cloud tient les connexions des agents en mémoire de l'instance : en multi-instance, les agents doivent joindre l'instance qui reçoit les paiements de leur organisation. **En production : une seule instance qui reçoit les agents, ou un réseau privé entre instances requis** (à traiter avant la mise à l'échelle).
 
 ## PSP de la caisse, statut, rapprochement
 
@@ -114,6 +114,26 @@ Meridian est un connecteur et un catalogue, pas un orchestrateur : le PSP de cha
 
 - `GET /v1/status` (public) : taux de réponse et délai moyen par PSP, agrégés par heure (migration 008), sans volume, rien sous 20 paiements. Page `/fr/statut/`.
 - `POST /v1/reconcile` : redemande au PSP l'état de chaque paiement terminé et signale tout débit sans « autorisé » au journal, ou l'inverse.
+
+## Production
+
+Checklist complète : `docs/production-checklist.md` · décisions : `docs/adr/002-production-readiness.md`.
+Déploiement : `infra/fly/api.prod.toml` (manuel, environnement `production`), base : `infra/postgres-eu.md`
+(**connexion directe requise**, pas de pooler en mode transaction).
+
+Exploitation en production :
+
+- **Santé** : `GET /health` (public, 503 si la base ne répond pas) — à brancher sur un ping uptime externe.
+- **Ops** : `GET /v1/ops` (authentifié) : `uptime`, `pending`, `stuck`, `edges` (agents connectés), `journalCount`, `db`.
+- **Alerting conseillé** : uptime externe sur `/health`, alerte sur les logs `payment_stuck` et `stuck > 0` dans `/v1/ops`.
+- **Rotation des clés** : `JOURNAL_KEY_ID` + `JOURNAL_KEYS_PREVIOUS` (format `kid=clé,kid=clé`) pour les signatures ;
+  `MASTER_KEY_VERSION` + `MASTER_KEYS_PREVIOUS` puis `pnpm rotate-secrets` pour les secrets PSP en base.
+- **Runbook incident minimal** : paiement `stuck` → vérifier la santé du PSP concerné (`GET /v1/status`,
+  `POST /v1/pos/{id}/health`) → lancer `POST /v1/reconcile` pour comparer Meridian et le PSP → le scanner
+  reprend seul les paiements orphelins ; jamais de « échec » sans issue connue.
+- **Limites connues** : les remboursements sont pré-journalisés (`refund_pending` avant l'appel PSP, reprise
+  idempotente) ; la rotation des clés est possible sans coupure ; le relais edge est mono-instance
+  (voir ci-dessus) ; le secret de webhook est global (URL par org via `PUT /v1/org/webhook`).
 
 ## Règles non négociables
 

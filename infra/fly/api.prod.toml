@@ -1,0 +1,39 @@
+# API Meridian — production, région principale Paris, données dans l'UE.
+# fly launch --config infra/fly/api.prod.toml --no-deploy
+# fly secrets set --config infra/fly/api.prod.toml DATABASE_URL=… JOURNAL_KEY=… MASTER_KEY=… BOOTSTRAP_API_KEY=mk_live_$(openssl rand -hex 16) PUBLIC_URL=…
+# fly scale count 2 --config infra/fly/api.prod.toml
+app = "meridian-api"
+primary_region = "cdg"
+
+[build]
+  dockerfile = "../../Dockerfile"
+
+[env]
+  PORT = "8080"
+  TRUST_PROXY = "true"
+  SCAN_MS = "3000"
+  # Rotation des clés : identifiant courant, anciennes en secrets (JOURNAL_KEYS_PREVIOUS, MASTER_KEYS_PREVIOUS).
+  JOURNAL_KEY_ID = "1"
+  MASTER_KEY_VERSION = "1"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "off"
+  min_machines_running = 1
+  kill_timeout = "30s" # drain de l'arrêt : le moteur termine les paiements en cours
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "15s"
+    method = "GET"
+    path = "/health"
+    timeout = "3s"
+
+# Pas de services TCP : les passerelles caisse (Concert, ZVT) ne sont pas exposées sur Internet.
+# En production elles se branchent sur le réseau privé du magasin via l'agent edge, ou un tunnel privé.
+
+# Multi-instance : fly scale count 2 --region cdg (coordination par PostgreSQL, rien d'autre à configurer).
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

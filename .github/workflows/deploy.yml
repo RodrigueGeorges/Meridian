@@ -1,22 +1,31 @@
-name: deploy-demo
+name: deploy
 # Déploie la démo (simulateurs + API + portail) sur Fly.io, région Paris, après une CI verte sur main.
+# La production (infra/fly/api.prod.toml) n'est déployée que manuellement : « Run workflow » avec target=prod,
+# sous environnement GitHub « production ».
 on:
   workflow_run:
     workflows: [ci]
     types: [completed]
     branches: [main]
   workflow_dispatch:
+    inputs:
+      target:
+        description: "Cible de déploiement : demo ou prod"
+        required: true
+        default: demo
+        type: choice
+        options: [demo, prod]
 
 jobs:
   deploy:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.target == 'demo') || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
     runs-on: ubuntu-latest
     concurrency: deploy-demo
     env:
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: superfly/flyctl-actions/setup-flyctl@98172f70657cb3e15db199af139be99bd3e61200 # master
       - run: flyctl deploy --config infra/fly/sim.toml --remote-only
       - run: flyctl deploy --config infra/fly/api.toml --remote-only
       - name: Test de fumée
@@ -26,3 +35,20 @@ jobs:
           curl -fsS -X POST https://meridian-api-demo.fly.dev/v1/payments \
             -H "authorization: Bearer ${{ secrets.DEMO_API_KEY }}" -H "content-type: application/json" \
             -d "{\"posId\":\"pos_demo_FR\",\"reference\":\"SMOKE-${{ github.run_id }}\",\"amount\":100,\"currency\":\"EUR\",\"waitMs\":8000}" | grep -q authorized
+
+  # Production : déclenchement manuel uniquement (« Run workflow », target=prod), environnement protégé.
+  deploy-prod:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.target == 'prod' }}
+    runs-on: ubuntu-latest
+    concurrency: deploy-prod
+    environment: production
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: superfly/flyctl-actions/setup-flyctl@98172f70657cb3e15db199af139be99bd3e61200 # master
+      - run: flyctl deploy --config infra/fly/api.prod.toml --remote-only
+      - name: Test de fumée
+        run: |
+          sleep 10
+          curl -fsS https://meridian-api.fly.dev/health
