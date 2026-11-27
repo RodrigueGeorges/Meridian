@@ -46,7 +46,7 @@ describe('API locale : caisse installée → agent → TPE', () => {
   it('les 5 appels, sans Internet, avec le SDK habituel', async () => {
     const a = await startAgent({ driver: new CaisseApDriver({ host: '127.0.0.1', port: tpe.caisseAp.port }), local: { port: 0 } });
     agents.push(a);
-    const m = new Meridian({ apiKey: 'local', posId: 'caisse-1', baseUrl: a.localUrl! });
+    const m = new Meridian({ apiKey: a.localToken!, posId: 'caisse-1', baseUrl: a.localUrl! });
     const before = tpe.caisseAp.sim.debits();
     await m.pay({ reference: 'LOC-1', amount: 2450, currency: 'EUR' });
     await m.pay({ reference: 'LOC-1', amount: 2450, currency: 'EUR' }); // rejeu
@@ -55,8 +55,9 @@ describe('API locale : caisse installée → agent → TPE', () => {
     expect(tpe.caisseAp.sim.debits() - before).toBe(1);
     expect((await m.receipt('LOC-1')).proof.signature).toBeTruthy();
     expect((await m.refund('LOC-1', { amount: 450, refundNumber: 1 })).refunded).toBe(450);
-    const verify = await (await fetch(`${a.localUrl}/v1/journal/verify`)).json();
+    const verify = await (await fetch(`${a.localUrl}/v1/journal/verify`, { headers: { authorization: `Bearer ${a.localToken}` } })).json();
     expect(verify.ok).toBe(true);
+    expect((await fetch(`${a.localUrl}/v1/journal/verify`)).status).toBe(401); // jeton obligatoire
     await m.pay({ reference: 'LOC-2', amount: 1013, currency: 'EUR' });
     expect((await m.waitForFinal('LOC-2', { timeoutMs: 10_000 })).state).toBe('declined');
   });

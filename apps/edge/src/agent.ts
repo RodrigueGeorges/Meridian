@@ -70,12 +70,24 @@ export async function startAgent(o: AgentOptions) {
   // ---------- API locale ----------
   let localServer: http.Server | undefined;
   let localUrl: string | undefined;
+  let localToken: string | undefined;
   if (o.local !== false) {
     const lo = o.local ?? {};
+    // Jeton obligatoire. Absent de la config : généré et persisté à côté de la clé du journal (mode 0600),
+    // imprimé une seule fois — aux redémarrages suivants il est relu depuis le fichier, pas ré-imprimé.
+    let token = lo.token;
+    const tf = o.dataDir ? join(o.dataDir, 'local.token') : undefined;
+    if (!token && tf && existsSync(tf)) token = readFileSync(tf, 'utf8').trim();
+    if (!token) {
+      token = `edge_${randomBytes(24).toString('hex')}`;
+      if (tf) writeFileSync(tf, token, { mode: 0o600 });
+      console.log(`[meridian-edge] jeton API locale : ${token}`);
+    }
+    localToken = token;
     localServer = http.createServer(async (req, res) => {
       const send = (status: number, body: unknown) => { res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' }).end(JSON.stringify(body)); };
       try {
-        if (lo.token && req.headers.authorization !== `Bearer ${lo.token}`) return send(401, { error: { code: 'unauthorized', message: 'Jeton local invalide' } });
+        if (req.headers.authorization !== `Bearer ${token}`) return send(401, { error: { code: 'unauthorized', message: 'Jeton local invalide' } });
         let raw = '';
         for await (const c of req) { raw += c; if (raw.length > 64 * 1024) return send(413, { error: { code: 'too_large', message: 'Requête trop grande' } }); }
         const body = raw ? JSON.parse(raw) : {};
@@ -150,7 +162,7 @@ export async function startAgent(o: AgentOptions) {
   if (o.cloud) connect(); else readyResolve();
 
   return {
-    service, engine, localUrl,
+    service, engine, localUrl, localToken,
     /** Résolu à la première connexion au cloud (ou tout de suite sans cloud). */
     ready,
     get cloudConnected() { return connected; },

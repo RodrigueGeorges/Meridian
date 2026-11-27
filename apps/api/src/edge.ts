@@ -45,6 +45,11 @@ export class EdgeRelay {
     return [...this.conns.entries()].filter(([k]) => k.startsWith(`${orgId}/`)).map(([, c]) => c.info);
   }
 
+  /** Nombre total d'agents connectés au relais de cette instance (toutes organisations). */
+  count(): number {
+    return this.conns.size;
+  }
+
   /** Enveloppe un fetch : les URL edge:// passent par l'agent, les autres partent sur Internet. */
   fetcher(base: typeof fetch = fetch): typeof fetch {
     return (async (input: string | URL | Request, init?: RequestInit) => {

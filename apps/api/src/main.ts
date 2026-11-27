@@ -1,4 +1,4 @@
-import { buildServer } from './server.ts';
+import { API_VERSION, buildServer } from './server.ts';
 
 const env = process.env;
 const required = (k: string) => {
@@ -18,6 +18,19 @@ const keyMap = <T extends string | number>(cast: (s: string) => T, v?: string): 
     return [cast(x.slice(0, i)), x.slice(i + 1)] as [T, string];
   })) as Record<T, string>;
 };
+
+// ---------- Garde-fous de démarrage (refus plutôt qu'un déploiement silencieusement faux) ----------
+const die = (msg: string): never => { console.error(`Démarrage refusé : ${msg}`); process.exit(1); };
+
+// Sans base, le journal est volatile : interdit en production sauf contournements explicites et bornés
+// (démo éphémère, journal sur fichier, tests, ou ALLOW_EPHEMERAL=true assumé).
+if (!env.DATABASE_URL && env.DEMO_SEED !== 'true' && !env.JOURNAL_FILE && env.NODE_ENV !== 'test' && env.ALLOW_EPHEMERAL !== 'true') {
+  die('DATABASE_URL absent. Le mode éphémère (journal en mémoire) exige DEMO_SEED=true, JOURNAL_FILE, NODE_ENV=test ou ALLOW_EPHEMERAL=true.');
+}
+// Une organisation live ne cohabite jamais avec les données et simulateurs de démonstration.
+if (env.DEMO_SEED === 'true' && (env.BOOTSTRAP_API_KEY ?? '').startsWith('mk_live_')) {
+  die('DEMO_SEED=true avec une clé live (mk_live_…) : la démo est réservée aux clés de test.');
+}
 
 const { app } = await buildServer({
   databaseUrl: env.DATABASE_URL,
@@ -50,4 +63,5 @@ const { app } = await buildServer({
   },
 });
 await app.listen({ port: Number(env.PORT ?? 8080), host: '0.0.0.0' });
+console.log(JSON.stringify({ event: 'boot', persistent: Boolean(env.DATABASE_URL || env.JOURNAL_FILE), demoSeed: env.DEMO_SEED === 'true', bridges: Boolean(env.CONCERT_PORT || env.ZVT_PORT), version: API_VERSION }));
 for (const sig of ['SIGTERM', 'SIGINT'] as const) process.on(sig, () => void app.close().then(() => process.exit(0)));

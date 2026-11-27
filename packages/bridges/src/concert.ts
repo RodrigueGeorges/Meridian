@@ -76,15 +76,18 @@ export async function handleConcert(req: Record<string, string>, target: BridgeT
   }
 }
 
-/** Serveur TCP Concert. Une requête par connexion, comme un TPE Caisse-AP IP. */
+/** Serveur TCP Concert. Une requête par connexion, comme un TPE Caisse-AP IP.
+ *  Bornes : 64 Ko de trame maximum, 200 connexions simultanées, inactivité 2 min. */
 export function createConcertServer(target: BridgeTarget, o: ConcertOptions): net.Server {
-  return net.createServer((sock) => {
+  const srv = net.createServer((sock) => {
     let buf = '';
     let busy = false;
     sock.setEncoding('ascii');
+    sock.setTimeout(120_000, () => sock.end());
     sock.on('data', async (chunk: string) => {
       if (busy) return;
       buf += chunk;
+      if (buf.length > 64 * 1024) { sock.destroy(); return; } // au-delà de la trame maximale : connexion détruite
       let parsed;
       try {
         parsed = parseTlv(buf);
@@ -101,6 +104,8 @@ export function createConcertServer(target: BridgeTarget, o: ConcertOptions): ne
     });
     sock.on('error', () => undefined);
   });
+  srv.maxConnections = 200; // au-delà : la connexion est refusée (événement 'drop'), le serveur reste vivant
+  return srv;
 }
 
 export { ISO_NUMERIC_REV };

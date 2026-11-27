@@ -54,16 +54,19 @@ export function parseBmps(d: Buffer): { amount?: number; currency?: string; rece
 
 export interface ZvtOptions { posId: string; currency?: string; timeoutMs?: number }
 
+/** Serveur TCP ZVT. Bornes : 64 Ko de trame maximum, 200 connexions simultanées, inactivité 2 min. */
 export function createZvtServer(target: BridgeTarget, o: ZvtOptions): net.Server {
   const receipts = new Map<number, string>(); // n° de reçu → référence Meridian
   let receiptNo = 0;
   let day: string[] = []; // références autorisées par ce terminal depuis la dernière clôture
-  return net.createServer((sock) => {
+  const srv = net.createServer((sock) => {
     let buf = Buffer.alloc(0);
     let current: string | undefined;
     const send = (b: Buffer) => !sock.destroyed && sock.write(b);
+    sock.setTimeout(120_000, () => sock.end());
     sock.on('data', async (chunk: Buffer) => {
       buf = Buffer.concat([buf, chunk]);
+      if (buf.length > 64 * 1024) { sock.destroy(); return; } // au-delà de la trame maximale : connexion détruite
       for (;;) {
         const m = readApdu(buf);
         if (!m) return;
@@ -144,4 +147,6 @@ export function createZvtServer(target: BridgeTarget, o: ZvtOptions): net.Server
     });
     sock.on('error', () => undefined);
   });
+  srv.maxConnections = 200; // au-delà : la connexion est refusée (événement 'drop'), le serveur reste vivant
+  return srv;
 }

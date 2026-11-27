@@ -131,7 +131,7 @@ importers:
         specifier: workspace:*
         version: link:../engine
       fast-xml-parser:
-        specifier: ^5
+        specifier: 5.12.1
         version: 5.12.1
 
   packages/core: {}

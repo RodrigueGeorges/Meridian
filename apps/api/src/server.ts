@@ -64,8 +64,21 @@ interface KeyStore {
 
 const sha = (s: string) => createHash('sha256').update(s).digest('hex');
 
+/** Version de l'API (alignée sur apps/api/package.json), pour le log de démarrage. */
+export const API_VERSION = '0.1.0';
+
 export async function buildServer(o: ServerOptions) {
+  // Portes de démarrage (les mêmes combinaisons sont refusées en amont dans main.ts) :
+  //   - l'URL de PSP personnalisée est une porte SSRF : interdite dès qu'une clé live existe ;
+  //   - la démo (simulateurs, points de vente factices) n'accueille jamais une organisation live.
+  if (o.allowTestBaseUrl && o.bootstrapKey?.startsWith('mk_live_')) {
+    throw new Error('ALLOW_TEST_BASE_URL interdit avec une clé live (mk_live_…) : URL de PSP personnalisée réservée aux organisations de test.');
+  }
+  if (o.demoSeed && o.bootstrapKey?.startsWith('mk_live_')) {
+    throw new Error('DEMO_SEED interdit avec une clé live (mk_live_…) : la démo est réservée aux clés de test.');
+  }
   const app = Fastify({ trustProxy: o.trustProxy ?? false, logger: o.logger ? { level: 'info', redact: ['req.headers.authorization'] } : false });
+  if (!o.publicUrl) app.log.warn('PUBLIC_URL non définie : les URL absolues du site sont déduites de l\'en-tête Host de chaque requête');
 
   // ---------- En-têtes de sécurité et compression ----------
   await app.register(fastifyHelmet, {
@@ -93,6 +106,9 @@ export async function buildServer(o: ServerOptions) {
   let keys: KeyStore;
   let pool: pg.Pool | undefined;
   let cluster: PgCluster | undefined;
+  /** URL webhook d'une organisation (repli sur le webhook global), et sa mise à jour. */
+  let orgWebhookUrl: (orgId: string) => Promise<string | undefined>;
+  let setOrgWebhook: (orgId: string, url: string | null) => Promise<void>;
   if (o.databaseUrl) {
     // Les verrous consultatifs de session (pilote unique, migrations) exigent une connexion directe :
     // un pooler en mode transaction les rend non fiables. Refus par défaut, contournement explicite.
@@ -118,6 +134,11 @@ export async function buildServer(o: ServerOptions) {
         await p.query('INSERT INTO api_keys (id, org_id, prefix, hash, mode) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (hash) DO NOTHING', [`key_${sha(key).slice(0, 12)}`, orgId, key.slice(0, 12), sha(key), mode]);
       },
     };
+    orgWebhookUrl = async (orgId) => {
+      const r = await p.query('SELECT webhook_url FROM organizations WHERE id=$1', [orgId]).catch(() => undefined);
+      return (r?.rows[0]?.webhook_url as string | null | undefined) ?? o.webhookUrl;
+    };
+    setOrgWebhook = async (orgId, url) => { await p.query('UPDATE organizations SET webhook_url=$2 WHERE id=$1', [orgId, url]); };
   } else {
     store = o.journalFile ? new JsonlStore(o.journalFile) : new MemoryStore();
     repo = new MemoryPosRepo();
@@ -126,10 +147,25 @@ export async function buildServer(o: ServerOptions) {
       async find(hash) { return mem.get(hash); },
       async add(orgId, _name, key, mode) { mem.set(sha(key), { id: orgId, mode, webhookUrl: o.webhookUrl }); },
     };
+    orgWebhookUrl = async (orgId) => [...mem.values()].find((x) => x.id === orgId)?.webhookUrl ?? o.webhookUrl;
+    setOrgWebhook = async (orgId, url) => { for (const x of mem.values()) if (x.id === orgId) x.webhookUrl = url ?? undefined; };
   }
   if (o.bootstrapKey) await keys.add('org_demo', 'Démo', o.bootstrapKey, o.bootstrapKey.startsWith('mk_live_') ? 'live' : 'test');
 
   // ---------- Webhooks sortants signés (file persistante en base, mémoire en mode local) ----------
+  // SSRF sortant : l'URL de livraison est choisie par le marchand (globale ou par organisation).
+  // En présence de trafic réel : https obligatoire et hôte public (adresses loopback/privées refusées,
+  // vérification littérale sur le hostname, sans résolution DNS). En mode test (ALLOW_TEST_BASE_URL),
+  // http et loopback sont admis : le simulateur de test sert en http local.
+  const webhookUrlOk = (raw: string): boolean => {
+    let u: URL;
+    try { u = new URL(raw); } catch { return false; }
+    if (o.allowTestBaseUrl) return u.protocol === 'http:' || u.protocol === 'https:';
+    if (u.protocol !== 'https:') return false;
+    const h = u.hostname.toLowerCase();
+    if (h === 'localhost' || h === '::1' || h === '[::1]') return false;
+    return !/^(127\.|169\.254\.|10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.)/.test(h);
+  };
   const sign = (body: string) => {
     const t = Math.floor(Date.now() / 1000);
     return `t=${t},v1=${createHmac('sha256', o.webhookSecret ?? '').update(`${t}.${body}`).digest('hex')}`;
@@ -139,8 +175,9 @@ export async function buildServer(o: ServerOptions) {
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
   };
   const deliver = async (orgId: string, event: string, data: unknown) => {
-    const url = o.webhookUrl;
-    if (!url || !o.webhookSecret) return;
+    // URL webhook de l'organisation si elle en a défini une, sinon le webhook global.
+    const url = (await orgWebhookUrl(orgId).catch(() => undefined)) ?? o.webhookUrl;
+    if (!url || !o.webhookSecret || !webhookUrlOk(url)) return;
     const id = `evt_${randomBytes(8).toString('hex')}`;
     const payload = { id, type: event, created: new Date().toISOString(), org: orgId, data };
     if (pool) {
@@ -158,28 +195,30 @@ export async function buildServer(o: ServerOptions) {
   if (pool) {
     const p = pool;
     webhookTimer = setInterval(async () => {
-      const client = await p.connect().catch(() => undefined);
-      if (!client) return;
-      try {
-        await client.query('BEGIN');
-        const r = await client.query("SELECT * FROM webhook_deliveries WHERE status = 'pending' AND next_at <= now() ORDER BY next_at LIMIT 20 FOR UPDATE SKIP LOCKED");
-        for (const w of r.rows) {
-          try {
-            await post(w.url, JSON.stringify(w.payload));
-            await client.query("UPDATE webhook_deliveries SET status = 'delivered', attempts = attempts + 1 WHERE id = $1", [w.id]);
-          } catch (e) {
-            const attempts = (w.attempts as number) + 1;
-            await client.query(
-              "UPDATE webhook_deliveries SET attempts = $2, last_error = $3, status = CASE WHEN $2 >= 12 THEN 'failed' ELSE 'pending' END, next_at = now() + make_interval(secs => LEAST(3600, 2 ^ $2)) WHERE id = $1",
-              [w.id, attempts, (e as Error).message],
-            );
-          }
+      // Pas de verrou de ligne pendant l'appel HTTP : un endpoint lent bloquerait la file entière.
+      // Les livraisons dues sont marquées (+60 s sur next_at) par un UPDATE court qui libère les lignes
+      // tout de suite ; en cas de crash entre la marque et l'appel, elles redeviennent dues après ce délai.
+      const r = await p.query(
+        `UPDATE webhook_deliveries SET next_at = now() + interval '60 seconds' WHERE id IN (
+           SELECT id FROM webhook_deliveries WHERE status = 'pending' AND next_at <= now() ORDER BY next_at LIMIT 20 FOR UPDATE SKIP LOCKED
+         ) RETURNING *`,
+      ).catch(() => undefined);
+      if (!r) return;
+      for (const w of r.rows) {
+        if (!webhookUrlOk(w.url as string)) {
+          await p.query("UPDATE webhook_deliveries SET status = 'failed', last_error = 'URL de webhook refusée (https et hôte public requis)' WHERE id = $1", [w.id]).catch(() => undefined);
+          continue;
         }
-        await client.query('COMMIT');
-      } catch {
-        await client.query('ROLLBACK').catch(() => undefined);
-      } finally {
-        client.release();
+        try {
+          await post(w.url as string, JSON.stringify(w.payload));
+          await p.query("UPDATE webhook_deliveries SET status = 'delivered', attempts = attempts + 1 WHERE id = $1", [w.id]);
+        } catch (e) {
+          const attempts = (w.attempts as number) + 1;
+          await p.query(
+            "UPDATE webhook_deliveries SET attempts = $2, last_error = $3, status = CASE WHEN $2 >= 12 THEN 'failed' ELSE 'pending' END, next_at = now() + make_interval(secs => LEAST(3600, 2 ^ $2)) WHERE id = $1",
+            [w.id, attempts, (e as Error).message],
+          );
+        }
       }
     }, 1000);
     webhookTimer.unref();
@@ -231,10 +270,13 @@ export async function buildServer(o: ServerOptions) {
 
   // ---------- Authentification ----------
   const auth = async (req: FastifyRequest): Promise<Org> => {
+    // Échecs d'authentification plafonnés à 60/min par IP : au-delà, 429 avant même la recherche de clé.
+    if (!(await peek('auth', req.ip, 60, 60_000))) throw new MeridianError('rate_limited', 'Trop de tentatives, réessayez dans une minute', 429);
     const h = req.headers.authorization ?? '';
     const m = h.match(/^Bearer (mk_(test|live)_[A-Za-z0-9]+)$/);
     const org = m ? await keys.find(sha(m[1]!)) : undefined;
     if (!org) {
+      await allow('auth', req.ip, 60, 60_000); // l'échec compte, la réussite non
       void audit(req, undefined, 'auth.failed', req.url.split('?')[0]);
       throw new MeridianError('unauthorized', 'Clé API Meridian invalide', 401);
     }
@@ -265,6 +307,28 @@ export async function buildServer(o: ServerOptions) {
     memHits.set(id, [...recent, now]);
     return true;
   };
+  /** Lit le compteur sans l'incrémenter (throttle des échecs d'authentification, avant la recherche de clé). */
+  const peek = async (bucket: string, ip: string, max: number, windowMs: number): Promise<boolean> => {
+    const key = ipKey(ip);
+    if (pool) {
+      const r = await pool.query('SELECT count(*)::int AS n FROM rate_hits WHERE bucket=$1 AND key=$2 AND at > now() - make_interval(secs => $3::double precision)', [bucket, key, windowMs / 1000]);
+      return Number(r.rows[0]?.n ?? 0) < max;
+    }
+    const now = Date.now(), id = `${bucket}:${key}`;
+    return (memHits.get(id) ?? []).filter((t) => now - t < windowMs).length < max;
+  };
+  // Limites des routes authentifiées : 120 requêtes/min par IP, 300/min par organisation.
+  // Le rapprochement est plus sévère (bucket 'reconcile', 6/min par IP) : jusqu'à 200 appels PSP par exécution.
+  const apiRate = async (req: FastifyRequest, org: Org, bucket = 'api', max = 120) => {
+    if (!(await allow(bucket, req.ip, max, 60_000)) || !(await allow('api_org', org.id, 300, 60_000))) {
+      throw new MeridianError('rate_limited', 'Trop de requêtes, réessayez dans une minute', 429);
+    }
+  };
+  const authed = async (req: FastifyRequest): Promise<Org> => {
+    const org = await auth(req);
+    await apiRate(req, org);
+    return org;
+  };
   // ---------- Journal d'audit des actions d'administration (PCI DSS 10) ----------
   type AuditEntry = { at: string; orgId: string | null; action: string; target: string | null; keyPrefix: string | null; ipHash: string; detail: Record<string, unknown> };
   const memAudit: AuditEntry[] = [];
@@ -278,6 +342,7 @@ export async function buildServer(o: ServerOptions) {
   };
 
   // Purge RGPD : traces de limite de débit après 24 h, demandes de contact après la durée de conservation.
+  // Le journal d'audit est purgé au-delà de 370 jours (PCI DSS exige 1 an ; exporter avant pour garder plus longtemps).
   const retentionDays = o.contactRetentionDays ?? 1095;
   const purge = async () => {
     if (!pool) return;
@@ -285,6 +350,7 @@ export async function buildServer(o: ServerOptions) {
       await pool.query("DELETE FROM rate_hits WHERE at < now() - interval '1 day'");
       await pool.query('DELETE FROM contact_requests WHERE created_at < now() - make_interval(days => $1::int)', [retentionDays]);
       await pool.query("DELETE FROM site_stats WHERE day < current_date - interval '25 months'");
+      await pool.query("DELETE FROM audit_log WHERE at < now() - interval '370 days'");
       await status.purge(90);
     } catch (e) { app.log.warn({ err: e }, 'purge'); }
   };
@@ -294,6 +360,7 @@ export async function buildServer(o: ServerOptions) {
 
   // ---------- Démo publique « Essayez de le casser » (mode démo uniquement) ----------
   // Vraies pannes injectées dans le simulateur PSP, vrai moteur, vrai journal ; une exécution à la fois.
+  // La route n'existe que sous `demoSeed` : en production elle n'est tout simplement pas enregistrée.
   if (o.demoSeed) {
     const seed = o.demoSeed;
     let queue: Promise<unknown> = Promise.resolve();
@@ -385,7 +452,7 @@ export async function buildServer(o: ServerOptions) {
   const PayBody = z.object({ posId: z.string(), reference: z.string().min(1).max(64), amount: z.number().int().positive().max(MAX_AMOUNT), currency: z.string().length(3), waitMs: z.number().int().min(0).max(120_000).optional() });
   app.post('/v1/payments', async (req, reply) => {
     if (closing) throw new MeridianError('shutting_down', 'Arrêt en cours, nouvelles demandes refusées', 503);
-    const org = await auth(req);
+    const org = await authed(req);
     const b = PayBody.parse(req.body);
     await ownPos(org, b.posId);
     let v: PaymentView = await engine.pay(b);
@@ -394,13 +461,13 @@ export async function buildServer(o: ServerOptions) {
   });
   const PosQuery = z.object({ posId: z.string() });
   app.get('/v1/payments', async (req) => {
-    const org = await auth(req);
+    const org = await authed(req);
     const { posId } = PosQuery.parse(req.query);
     await ownPos(org, posId);
     return engine.listFresh(posId);
   });
   app.get('/v1/payments/:reference', async (req) => {
-    const org = await auth(req);
+    const org = await authed(req);
     const { posId } = PosQuery.parse(req.query);
     await ownPos(org, posId);
     const { reference } = req.params as { reference: string };
@@ -408,7 +475,7 @@ export async function buildServer(o: ServerOptions) {
     return waitMs ? engine.waitForFinal(posId, reference, Math.min(waitMs, 60_000)) : engine.statusFresh(posId, reference);
   });
   app.post('/v1/payments/:reference/cancel', async (req) => {
-    const org = await auth(req);
+    const org = await authed(req);
     const { posId } = PosQuery.parse(req.body);
     await ownPos(org, posId);
     const reference = (req.params as { reference: string }).reference;
@@ -417,7 +484,7 @@ export async function buildServer(o: ServerOptions) {
   });
   const RefundBody = z.object({ posId: z.string(), amount: z.number().int().positive().max(MAX_AMOUNT), refundNumber: z.number().int().positive().optional() });
   app.post('/v1/payments/:reference/refunds', async (req) => {
-    const org = await auth(req);
+    const org = await authed(req);
     const b = RefundBody.parse(req.body);
     await ownPos(org, b.posId);
     const reference = (req.params as { reference: string }).reference;
@@ -425,20 +492,21 @@ export async function buildServer(o: ServerOptions) {
     return engine.refund(b.posId, reference, b.amount, b.refundNumber);
   });
   app.get('/v1/payments/:reference/receipt', async (req) => {
-    const org = await auth(req);
+    const org = await authed(req);
     const { posId } = PosQuery.parse(req.query);
     await ownPos(org, posId);
     return engine.receiptFresh(posId, (req.params as { reference: string }).reference);
   });
   app.get('/v1/payments/:reference/journal', async (req) => {
-    const org = await auth(req);
+    const org = await authed(req);
     const { posId } = PosQuery.parse(req.query);
     await ownPos(org, posId);
     return store.byReference(posId, (req.params as { reference: string }).reference);
   });
   // Rapprochement Meridian ↔ PSP : chaque paiement terminé est redemandé au PSP ; un écart = débit sans « autorisé », ou l'inverse.
   app.post('/v1/reconcile', async (req) => {
-    const org = await auth(req);
+    const org = await authed(req);
+    await apiRate(req, org, 'reconcile', 6); // 6/min par IP : jusqu'à 200 appels PSP par exécution
     const b = z.object({ posId: z.string(), from: z.string().datetime().optional(), to: z.string().datetime().optional(), limit: z.number().int().min(1).max(200).default(100) }).parse(req.body);
     await ownPos(org, b.posId);
     const from = b.from ? Date.parse(b.from) : 0, to = b.to ? Date.parse(b.to) : Infinity;
@@ -463,7 +531,7 @@ export async function buildServer(o: ServerOptions) {
     };
   });
   app.get('/v1/journal/verify', async (req) => {
-    await auth(req);
+    await authed(req);
     return engine.verify();
   });
 
@@ -476,7 +544,7 @@ export async function buildServer(o: ServerOptions) {
     locale: z.string().optional(),
   });
   app.post('/v1/pos', async (req, reply) => {
-    const org = await auth(req);
+    const org = await authed(req);
     const b = PosBody.parse(req.body);
     const prof = COUNTRIES[b.country]!;
     const currency = (b.currency ?? prof.currency).toUpperCase();
@@ -489,7 +557,7 @@ export async function buildServer(o: ServerOptions) {
     return reply.code(201).send(pos);
   });
   app.get('/v1/audit', async (req) => {
-    const org = await auth(req);
+    const org = await authed(req);
     const { limit } = z.object({ limit: z.coerce.number().int().min(1).max(500).default(100) }).parse(req.query);
     if (pool) {
       const r = await pool.query('SELECT at, action, target, key_prefix, ip_hash, detail FROM audit_log WHERE org_id=$1 ORDER BY id DESC LIMIT $2', [org.id, limit]);
@@ -497,13 +565,13 @@ export async function buildServer(o: ServerOptions) {
     }
     return memAudit.filter((e) => e.orgId === org.id).slice(-limit).reverse().map(({ orgId: _o, ...e }) => e);
   });
-  app.get('/v1/pos', async (req) => repo.list((await auth(req)).id));
-  app.get('/v1/pos/:id', async (req) => ownPos(await auth(req), (req.params as { id: string }).id));
+  app.get('/v1/pos', async (req) => repo.list((await authed(req)).id));
+  app.get('/v1/pos/:id', async (req) => ownPos(await authed(req), (req.params as { id: string }).id));
 
   const Binding = z.object({ moduleId: z.string(), config: z.record(z.string(), z.unknown()), baseUrl: z.string().url().optional() });
   // PSP de la caisse : le PSP choisi dans le catalogue, et un PSP de secours facultatif si le premier est injoignable.
   app.put('/v1/pos/:id/psp', async (req) => {
-    const org = await auth(req);
+    const org = await authed(req);
     const pos = await ownPos(org, (req.params as { id: string }).id);
     const b = z.object({ primary: Binding, fallback: Binding.optional() }).parse(req.body);
     if (b.fallback && b.fallback.moduleId === b.primary.moduleId) throw new MeridianError('same_psp', 'Le PSP de secours doit être différent du PSP principal', 422);
@@ -529,18 +597,48 @@ export async function buildServer(o: ServerOptions) {
   });
   // Agents des magasins : connexion sortante authentifiée par la clé de l'organisation.
   app.get('/v1/edge/connect', { websocket: true }, async (socket, req) => {
+    if (!(await allow('edge', req.ip, 30, 60_000))) { socket.close(4429, 'trop de connexions'); return; }
     let org: Org;
-    try { org = await auth(req); } catch { socket.close(4401, 'clé invalide'); return; }
+    try { org = await auth(req); } catch (e) { socket.close(e instanceof MeridianError && e.status === 429 ? 4429 : 4401, 'clé invalide'); return; }
     const agentId = String(req.headers['x-meridian-agent'] ?? '');
     if (!/^[A-Za-z0-9_-]{3,40}$/.test(agentId)) { socket.close(4400, 'identifiant d\'agent invalide'); return; }
+    // Une nouvelle connexion du même agent ferme l'ancienne (4409) : l'éviction est tracée.
+    if (edge.agents(org.id).some((a) => a.agentId === agentId)) void audit(req, org, 'agent_replaced', agentId, {});
     edge.attach(org.id, agentId, socket);
     void audit(req, org, 'edge.connected', agentId, {});
   });
-  app.get('/v1/edge/agents', async (req) => edge.agents((await auth(req)).id));
+  app.get('/v1/edge/agents', async (req) => edge.agents((await authed(req)).id));
+
+  // Webhook de l'organisation : URL de livraison propre à l'org (null = repli sur le webhook global).
+  // Le secret de signature est global pour l'instant : `secret` est accepté mais ignoré, tous les
+  // webhooks sont signés avec WEBHOOK_SECRET (voir en-tête « meridian-signature »).
+  app.put('/v1/org/webhook', async (req) => {
+    const org = await authed(req);
+    const b = z.object({ url: z.string().url().nullable(), secret: z.string().min(16).max(200).optional() }).parse(req.body);
+    if (b.url !== null && !webhookUrlOk(b.url)) throw new MeridianError('webhook_url_forbidden', 'URL de webhook refusée : https et hôte public requis (http/loopback admis en mode test)', 422);
+    await setOrgWebhook(org.id, b.url);
+    await audit(req, org, 'org.webhook_changed', org.id, { url: b.url });
+    return { orgId: org.id, webhookUrl: b.url, note: b.secret ? 'secret par organisation non pris en charge : WEBHOOK_SECRET global utilisé' : undefined };
+  });
+
+  // ---------- Observabilité minimale (même authentification que /v1/audit) ----------
+  // Pour un ping uptime externe : santé publique sur /health, compteurs d'exploitation ici.
+  app.get('/v1/ops', async (req) => {
+    await authed(req);
+    const stats = engine.stats();
+    const db = pool ? await Promise.race([
+      pool.query('SELECT 1').then(() => 'up' as const).catch(() => 'down' as const),
+      new Promise<'up' | 'down'>((r) => setTimeout(() => r('down'), 2000)),
+    ]) : 'down';
+    const journalCount = pool
+      ? Number((await pool.query('SELECT count(*)::int AS n FROM journal').catch(() => ({ rows: [{ n: -1 }] }))).rows[0]?.n ?? -1)
+      : (await store.all()).length;
+    return { uptime: Math.round(process.uptime()), ...stats, edges: edge.count(), journalCount, db };
+  });
 
   // Jeton de connexion pour le SDK du PSP sur l'appareil (Tap to Pay). Le secret du PSP ne quitte jamais Meridian.
   app.post('/v1/pos/:id/device-token', async (req) => {
-    const org = await auth(req);
+    const org = await authed(req);
     const pos = await ownPos(org, (req.params as { id: string }).id);
     const r = await repo.routing(pos.id);
     if (!r) throw new MeridianError('pos_not_configured', 'Aucun module actif', 422);
@@ -556,7 +654,7 @@ export async function buildServer(o: ServerOptions) {
     }
   });
   app.post('/v1/pos/:id/health', async (req) => {
-    const org = await auth(req);
+    const org = await authed(req);
     const pos = await ownPos(org, (req.params as { id: string }).id);
     const r = await repo.routing(pos.id);
     if (!r) throw new MeridianError('pos_not_configured', 'Aucun module actif', 422);
@@ -576,7 +674,7 @@ export async function buildServer(o: ServerOptions) {
   // nexo Retailer : JSON ou XML (application/xml, text/xml), réponse dans le même format que la requête.
   app.addContentTypeParser(['application/xml', 'text/xml'], { parseAs: 'string', bodyLimit: 256 * 1024 }, (_req, body, done) => done(null, body));
   app.post('/v1/nexo', async (req, reply) => {
-    const org = await auth(req);
+    const org = await authed(req);
     const xml = typeof req.body === 'string';
     let body: Record<string, unknown>;
     try { body = xml ? nexoFromXml(req.body as string) : (req.body as Record<string, unknown>); }
@@ -588,6 +686,9 @@ export async function buildServer(o: ServerOptions) {
   });
   const netServers: NetServer[] = [];
   const bridgeHost = o.bridges?.host ?? '127.0.0.1';
+  if (!['127.0.0.1', '::1', 'localhost'].includes(bridgeHost)) {
+    app.log.warn({ bridgeHost }, 'passerelles caisse exposées hors loopback : réseau privé du magasin requis, jamais Internet');
+  }
   if (o.bridges?.concertPort !== undefined) {
     const map = o.bridges.concertMap ?? {};
     const srv = createConcertServer(target, { posFor: (ca) => map[ca] ?? map[String(Number(ca))] });

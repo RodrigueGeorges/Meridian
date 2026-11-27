@@ -9,6 +9,6 @@
   "dependencies": {
     "@meridian/core": "workspace:*",
     "@meridian/engine": "workspace:*",
-    "fast-xml-parser": "^5"
+    "fast-xml-parser": "5.12.1"
   }
 }

@@ -126,10 +126,13 @@ export async function handleNexo(body: Json, target: BridgeTarget, opts: { timeo
 
 // ---------- Forme XML ----------
 // En XML nexo, les valeurs simples sont des attributs et les blocs des éléments ; la forme JSON reprend les mêmes noms.
-const xmlParser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '', parseAttributeValue: false, parseTagValue: false, isArray: (name) => ['TransactionTotals', 'PaymentTotals'].includes(name) });
+// Durcissement : aucune entité traitée (processEntities: false) et DOCTYPE refusé avant analyse —
+// pas d'expansion d'entités (bombe XML) ni de référence externe.
+const xmlParser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '', parseAttributeValue: false, parseTagValue: false, processEntities: false, isArray: (name) => ['TransactionTotals', 'PaymentTotals'].includes(name) });
 const xmlBuilder = new XMLBuilder({ ignoreAttributes: false, attributeNamePrefix: '@_', suppressEmptyNode: true, format: false });
 
 export function nexoFromXml(xml: string): Json {
+  if (/<!DOCTYPE|<!ENTITY/i.test(xml)) throw new Error('DOCTYPE/ENTITY interdit');
   return xmlParser.parse(xml) as Json;
 }
 

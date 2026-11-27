@@ -158,6 +158,10 @@ for (const mode of ['memory', 'postgres'] as const) {
       const out = await r.text();
       expect(out).toContain('<Response Result="Success"');
       expect(out).toContain('AuthorizedAmount="7.5"');
+      const evil = `<?xml version="1.0"?><!DOCTYPE x [<!ENTITY boom "expansion">]><SaleToPOIRequest><MessageHeader POIID="pos_demo_FR" MessageCategory="Login" MessageType="Request"/></SaleToPOIRequest>`;
+      const r2 = await fetch(`${base}/v1/nexo`, { method: 'POST', headers: { authorization: `Bearer ${KEY}`, 'content-type': 'application/xml' }, body: evil });
+      expect(r2.status).toBe(400);
+      expect(JSON.stringify(await r2.json())).not.toContain('expansion');
     });
 
     it('deux paiements différents en même temps sur le même terminal : un seul passe (terminal_busy)', async () => {

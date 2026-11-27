@@ -156,6 +156,36 @@ describe('Passerelle ZVT', () => {
   });
 });
 
+describe('Passerelles TCP bornées', () => {
+  /** Envoie 100 Ko sans trame complète ; résolu quand le serveur a fermé la connexion (vu côté serveur). */
+  const flood = async (s: net.Server, port: number, data: string | Buffer) => {
+    const closed = new Promise<void>((res) => s.once('connection', (c) => c.on('close', () => res())));
+    const sock = net.connect(port, '127.0.0.1', () => sock.write(data));
+    sock.on('error', () => undefined);
+    await closed;
+    sock.destroy();
+  };
+  it('Concert : 100 Ko sans trame complète → connexion détruite, le serveur reste vivant', async () => {
+    h = await harness();
+    srv = createConcertServer(engineTarget(h.engine), { posFor: (ca) => (ca === '01' ? h!.posId : undefined) });
+    const port = await listen(srv);
+    // Trame TLV valide en tête mais annoncée à 999 octets : jamais complète, le cap 64 Ko la détruit.
+    await flood(srv, port, 'CZ999' + 'X'.repeat(100 * 1024));
+    expect(srv.listening).toBe(true);
+    expect((await concertCall(port, { ...BASE, CB: '500', CD: '0' })).AE).toBe('10');
+  });
+  it('ZVT : 100 Ko de données sans trame complète → connexion détruite, le serveur reste vivant', async () => {
+    h = await harness({ country: 'DE' });
+    srv = createZvtServer(engineTarget(h.engine), { posId: h.posId });
+    const port = await listen(srv);
+    // APDU annonçant 65 535 octets de données : jamais complète, le cap 64 Ko la détruit.
+    await flood(srv, port, Buffer.concat([Buffer.from([0x06, 0x01, 0xff, 0xff, 0xff]), Buffer.alloc(100 * 1024, 0x58)]));
+    expect(srv.listening).toBe(true);
+    const reg = await zvtCall(port, apdu(0x06, 0x00, [0x00, 0x00, 0x00, 0x08, 0x09, 0x78]));
+    expect(reg.map((f) => f.toString('hex'))).toEqual(['800000', '060f00']);
+  });
+});
+
 describe('Passerelle nexo Retailer', () => {
   const hdr = (posId: string, cat: string) => ({ ProtocolVersion: '3.1', MessageClass: 'Service', MessageCategory: cat, MessageType: 'Request', ServiceID: 'S1', SaleID: 'CAISSE-1', POIID: posId });
   it('Payment (idempotent par TransactionID), TransactionStatus, Reversal', async () => {
@@ -200,6 +230,12 @@ describe('Passerelle nexo Retailer', () => {
     expect(out).toContain('<Response Result="Success"');
     expect(out).toContain('AuthorizedAmount="12.3"');
     expect(h.sims.debits()).toBe(1);
+  });
+  it('entité interne déclarée : refus propre, ni expansion ni crash', () => {
+    const xml = `<?xml version="1.0"?><!DOCTYPE x [<!ENTITY boom "expansion">]><SaleToPOIRequest><MessageHeader POIID="x" MessageCategory="Login" MessageType="Request"/></SaleToPOIRequest>`;
+    expect(() => nexoFromXml(xml)).toThrow(/DOCTYPE/);
+    const clean = nexoFromXml(`<SaleToPOIRequest><MessageHeader POIID="x" MessageCategory="Login"/></SaleToPOIRequest>`);
+    expect(clean.SaleToPOIRequest.MessageHeader.POIID).toBe('x');
   });
   it('refus → Result Failure, ErrorCondition Refusal', async () => {
     h = await harness();
