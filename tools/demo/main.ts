@@ -24,7 +24,7 @@ const KEY = 'mk_test_demo0123456789abcdef';
 const tpe = await startTerminalSims({ delayMs: 1200 });
 const agent = await startAgent({
   driver: new CaisseApDriver({ host: '127.0.0.1', port: tpe.caisseAp.port }),
-  local: { port: 8787 }, cloud: { url: `http://127.0.0.1:${PORT}`, apiKey: KEY, agentId: 'magasin-demo' },
+  local: { port: 8787, token: KEY }, cloud: { url: `http://127.0.0.1:${PORT}`, apiKey: KEY, agentId: 'magasin-demo' },
 });
 await agent.ready;
 const h = { authorization: `Bearer ${KEY}`, 'content-type': 'application/json' };

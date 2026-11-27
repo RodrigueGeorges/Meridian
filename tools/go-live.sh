@@ -13,7 +13,9 @@
 #   APP=meridian-api           nom de l'app Fly (défaut : celui d'infra/fly/api.prod.toml)
 #   REGION=cdg                 région (défaut : cdg, Paris)
 #   DB_NAME=<app>-db           cluster Managed Postgres ; DB_PLAN=Basic ; DB_GB=10
-#   SCALE=2                    nombre de machines après le premier déploiement (défaut : 1, puis 2)
+#   SCALE=1                    nombre de machines (défaut : 1 ; passer à 2 pour la haute dispo.
+#                              Attention : le relais edge est mono-instance — avec SCALE≥2, les
+#                              agents de magasin doivent joindre l'instance qui traite leurs paiements)
 #   PUBLIC_URL=https://…       défaut : https://$APP.fly.dev
 #   DATABASE_URL=postgres://…  base externe existante : le script ne crée pas de MPG
 #                              (connexion directe requise, pas de pooler en mode transaction)
@@ -76,7 +78,7 @@ METRICS_TOKEN="${METRICS_TOKEN:-$(rand 16)}" # les fichiers de secrets antérieu
 
 say "4/5 Déploiement"
 "$FLY" deploy --config infra/fly/api.prod.toml -a "$APP" --remote-only
-"$FLY" scale count "${SCALE:-2}" -a "$APP" -y 2>/dev/null || true
+"$FLY" scale count "${SCALE:-1}" -a "$APP" -y 2>/dev/null || true
 
 say "5/5 Test de fumée"
 sleep 8

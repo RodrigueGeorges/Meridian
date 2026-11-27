@@ -24,8 +24,11 @@ services:
     depends_on:
       db: { condition: service_healthy }
       sim: { condition: service_started }
-    ports: ["8080:8080", "8888:8888", "20007:20007"]
+    ports: ["8080:8080", "127.0.0.1:8888:8888", "127.0.0.1:20007:20007"]
     environment:
+      # Les passerelles doivent écouter sur l'interface du conteneur pour que les ports publiés répondent ;
+      # la publication est limitée à la boucle locale de l'hôte, donc pas d'exposition réseau.
+      BRIDGE_HOST: "0.0.0.0"
       CONCERT_PORT: "8888"
       CONCERT_POS_MAP: "01=pos_demo_FR"
       ZVT_PORT: "20007"

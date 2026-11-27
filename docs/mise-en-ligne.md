@@ -12,7 +12,7 @@ La CI (`ci.yml`) lance alors typecheck, tests sur PostgreSQL et gitleaks.
 ## 2. Secret sandbox Stripe
 Settings → Secrets → Actions → `STRIPE_TEST_KEY` = une clé **sk_test** neuve (régénérez celle collée dans le chat).
 Puis Actions → « Sandbox Stripe » → Run : un rapport par pays (FR, BE, NL, DE, ES, IT).
-En local : `STRIPE_TEST_KEY=sk_test_… COUNTRY=FR pnpm sandbox`.
+En local : `STRIPE_KEY=sk_test_… COUNTRY=FR pnpm sandbox` (variable `STRIPE_KEY`, `STRIPE_TEST_KEY` étant le nom du secret GitHub).
 
 ## 3. Fly.io (Paris)
 ```bash
@@ -45,4 +45,4 @@ Les étapes de l'image ont été rejouées sans Docker : installation figée OK,
 - Mesure d'audience sans cookie ni identifiant (`POST /v1/a`) : compteurs agrégés par jour, purge après 25 mois, désactivée si le navigateur envoie Global Privacy Control ou Do Not Track.
 - Après la mise en ligne : déclarer le domaine dans Google Search Console et y soumettre `/sitemap.xml`.
 
-Avant la mise en ligne : compléter les champs surlignés (`[[…]]`) de `apps/portal/content/` : `legal`, `privacy`, `security` et `stripe` en FR et EN (société, siège, RCS, directeur de la publication, adresse de l'hébergeur, mécanisme de transfert Fly.io, contact données personnelles).
+Avant la mise en ligne : compléter les champs surlignés (`[[…]]`) de `apps/portal/content/` : `legal`, `privacy`, `security`, `stripe` et `developers` en FR et EN (société, siège, RCS, directeur de la publication, adresse de l'hébergeur, mécanisme de transfert Fly.io, contact données personnelles).

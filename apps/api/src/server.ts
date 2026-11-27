@@ -109,6 +109,8 @@ export async function buildServer(o: ServerOptions) {
   /** URL webhook d'une organisation (repli sur le webhook global), et sa mise à jour. */
   let orgWebhookUrl: (orgId: string) => Promise<string | undefined>;
   let setOrgWebhook: (orgId: string, url: string | null) => Promise<void>;
+  /** L'organisation a-t-elle au moins une clé live active (webhooks : validation stricte de l'URL) ? */
+  let orgHasLiveKey: (orgId: string) => Promise<boolean>;
   if (o.databaseUrl) {
     // Les verrous consultatifs de session (pilote unique, migrations) exigent une connexion directe :
     // un pooler en mode transaction les rend non fiables. Refus par défaut, contournement explicite.
@@ -139,6 +141,10 @@ export async function buildServer(o: ServerOptions) {
       return (r?.rows[0]?.webhook_url as string | null | undefined) ?? o.webhookUrl;
     };
     setOrgWebhook = async (orgId, url) => { await p.query('UPDATE organizations SET webhook_url=$2 WHERE id=$1', [orgId, url]); };
+    orgHasLiveKey = async (orgId) => {
+      const r = await p.query("SELECT 1 FROM api_keys WHERE org_id=$1 AND mode='live' AND revoked_at IS NULL LIMIT 1", [orgId]).catch(() => undefined);
+      return r ? r.rows.length > 0 : true; // en cas de doute : validation stricte
+    };
   } else {
     store = o.journalFile ? new JsonlStore(o.journalFile) : new MemoryStore();
     repo = new MemoryPosRepo();
@@ -149,18 +155,20 @@ export async function buildServer(o: ServerOptions) {
     };
     orgWebhookUrl = async (orgId) => [...mem.values()].find((x) => x.id === orgId)?.webhookUrl ?? o.webhookUrl;
     setOrgWebhook = async (orgId, url) => { for (const x of mem.values()) if (x.id === orgId) x.webhookUrl = url ?? undefined; };
+    orgHasLiveKey = async (orgId) => [...mem.values()].some((x) => x.id === orgId && x.mode === 'live');
   }
   if (o.bootstrapKey) await keys.add('org_demo', 'Démo', o.bootstrapKey, o.bootstrapKey.startsWith('mk_live_') ? 'live' : 'test');
 
   // ---------- Webhooks sortants signés (file persistante en base, mémoire en mode local) ----------
   // SSRF sortant : l'URL de livraison est choisie par le marchand (globale ou par organisation).
   // En présence de trafic réel : https obligatoire et hôte public (adresses loopback/privées refusées,
-  // vérification littérale sur le hostname, sans résolution DNS). En mode test (ALLOW_TEST_BASE_URL),
-  // http et loopback sont admis : le simulateur de test sert en http local.
-  const webhookUrlOk = (raw: string): boolean => {
+  // vérification littérale sur le hostname, sans résolution DNS). Le régime souple (http/loopback)
+  // n'est admis que pour les organisations purement test (ALLOW_TEST_BASE_URL et aucune clé live) —
+  // jamais pour une organisation live, même sur un déploiement qui autorise le mode test.
+  const webhookUrlOk = (raw: string, testOk = false): boolean => {
     let u: URL;
     try { u = new URL(raw); } catch { return false; }
-    if (o.allowTestBaseUrl) return u.protocol === 'http:' || u.protocol === 'https:';
+    if (testOk) return u.protocol === 'http:' || u.protocol === 'https:';
     if (u.protocol !== 'https:') return false;
     // WHATWG normalise déjà les IPv4 exotiques (octal, hex, entier unique) en forme pointée.
     const h = u.hostname.toLowerCase().replace(/\.+$/, '');
@@ -185,7 +193,8 @@ export async function buildServer(o: ServerOptions) {
   const deliver = async (orgId: string, event: string, data: unknown) => {
     // URL webhook de l'organisation si elle en a défini une, sinon le webhook global.
     const url = (await orgWebhookUrl(orgId).catch(() => undefined)) ?? o.webhookUrl;
-    if (!url || !o.webhookSecret || !webhookUrlOk(url)) return;
+    const testOk = o.allowTestBaseUrl && !(await orgHasLiveKey(orgId).catch(() => true));
+    if (!url || !o.webhookSecret || !webhookUrlOk(url, testOk)) return;
     const id = `evt_${randomBytes(8).toString('hex')}`;
     const payload = { id, type: event, created: new Date().toISOString(), org: orgId, data };
     if (pool) {
@@ -214,7 +223,8 @@ export async function buildServer(o: ServerOptions) {
       ).catch(() => undefined);
       if (!r) return;
       for (const w of r.rows) {
-        if (!webhookUrlOk(w.url as string)) {
+        const testOk = o.allowTestBaseUrl && !(await orgHasLiveKey(w.org_id as string).catch(() => true));
+        if (!webhookUrlOk(w.url as string, testOk)) {
           await p.query("UPDATE webhook_deliveries SET status = 'failed', last_error = 'URL de webhook refusée (https et hôte public requis)' WHERE id = $1", [w.id]).catch(() => undefined);
           continue;
         }
@@ -625,7 +635,7 @@ export async function buildServer(o: ServerOptions) {
   app.put('/v1/org/webhook', async (req) => {
     const org = await authed(req);
     const b = z.object({ url: z.string().url().nullable(), secret: z.string().min(16).max(200).optional() }).parse(req.body);
-    if (b.url !== null && !webhookUrlOk(b.url)) throw new MeridianError('webhook_url_forbidden', 'URL de webhook refusée : https et hôte public requis (http/loopback admis en mode test)', 422);
+    if (b.url !== null && !webhookUrlOk(b.url, o.allowTestBaseUrl && org.mode === 'test')) throw new MeridianError('webhook_url_forbidden', 'URL de webhook refusée : https et hôte public requis (http/loopback admis en mode test)', 422);
     await setOrgWebhook(org.id, b.url);
     // Audit sans credentials : on ne journalise que l'hôte et le chemin, jamais user:pass ni query.
     const auditUrl = b.url === null ? null : (() => { const u = new URL(b.url); return `${u.origin}${u.pathname}`; })();

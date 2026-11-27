@@ -35,7 +35,8 @@ config, sécurité réseau, CI et documentation (lot 2).
    échecs d'auth 60/min/IP comptés avant la recherche de clé.
 10. **Webhooks par organisation** : URL propre à l'org (`PUT /v1/org/webhook`, repli sur le global),
     validée à l'appel — https + hôte public hors mode test ; l'appel HTTP sort du verrou de ligne
-    (marquage `next_at` + 60 s au lieu de `FOR UPDATE` pendant l'appel).
+    (marquage `next_at` + 5 min au lieu de `FOR UPDATE` pendant l'appel — supérieur au pire cas
+    du batch de 20 livraisons × 5 s de timeout HTTP).
 11. **XML nexo durci** : `processEntities: false`, DOCTYPE refusé, `fast-xml-parser` épinglé à 5.12.1.
 12. **Rétention `audit_log`** : DELETE possible seulement au-delà de 370 jours (migration 009),
     purge horaire ; PCI DSS exige 1 an.

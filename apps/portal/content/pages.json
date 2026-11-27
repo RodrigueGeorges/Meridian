@@ -49,6 +49,7 @@
  },
  {
   "id": "developers",
+  "todo": true,
   "slug": {
    "fr": "developpeurs",
    "en": "developers"

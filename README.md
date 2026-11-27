@@ -112,7 +112,7 @@ Le relais cloud tient les connexions des agents en mémoire de l'instance : en m
 
 Meridian est un connecteur et un catalogue, pas un orchestrateur : le PSP de chaque caisse est celui choisi dans le catalogue (`PUT /v1/pos/{id}/psp`), avec un PSP de secours facultatif utilisé seulement si le premier est injoignable avant tout envoi. Meridian ne choisit jamais le PSP paiement par paiement.
 
-- `GET /v1/status` (public) : taux de réponse et délai moyen par PSP, agrégés par heure (migration 008), sans volume, rien sous 20 paiements. Page `/fr/statut/`.
+- `GET /v1/status` (public) : taux de réponse et délai moyen par PSP, agrégés par heure (migration 007), sans volume, rien sous 20 paiements. Page `/fr/statut/`.
 - `POST /v1/reconcile` : redemande au PSP l'état de chaque paiement terminé et signale tout débit sans « autorisé » au journal, ou l'inverse.
 
 ## Production

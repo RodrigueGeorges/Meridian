@@ -1,7 +1,7 @@
 # API Meridian — production, région principale Paris, données dans l'UE.
 # fly launch --config infra/fly/api.prod.toml --no-deploy
 # fly secrets set --config infra/fly/api.prod.toml DATABASE_URL=… JOURNAL_KEY=… MASTER_KEY=… BOOTSTRAP_API_KEY=mk_live_$(openssl rand -hex 16) PUBLIC_URL=…
-# fly scale count 2 --config infra/fly/api.prod.toml
+# fly scale count 1 --config infra/fly/api.prod.toml   (voir la note multi-instance ci-dessous)
 app = "meridian-api"
 primary_region = "cdg"
 
@@ -33,7 +33,9 @@ primary_region = "cdg"
 # Pas de services TCP : les passerelles caisse (Concert, ZVT) ne sont pas exposées sur Internet.
 # En production elles se branchent sur le réseau privé du magasin via l'agent edge, ou un tunnel privé.
 
-# Multi-instance : fly scale count 2 --region cdg (coordination par PostgreSQL, rien d'autre à configurer).
+# Multi-instance : fly scale count 2 --region cdg (paiements coordonnés par PostgreSQL).
+# Réserve : le relais edge (agents de magasin) est mono-instance — à SCALE ≥ 2, les agents
+# d'une organisation doivent joindre l'instance qui reçoit ses paiements (voir ADR 002).
 [[vm]]
   size = "shared-cpu-1x"
   memory = "512mb"
