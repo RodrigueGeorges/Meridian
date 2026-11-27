@@ -144,7 +144,8 @@ export async function buildServer(o: ServerOptions) {
     const id = `evt_${randomBytes(8).toString('hex')}`;
     const payload = { id, type: event, created: new Date().toISOString(), org: orgId, data };
     if (pool) {
-      await pool.query('INSERT INTO webhook_deliveries (id, org_id, url, event, payload) VALUES ($1,$2,$3,$4,$5)', [id, orgId, url, event, JSON.stringify(payload)]);
+      // Le pool peut être fermé pendant l'arrêt : l'événement est perdu plutôt qu'une promesse ne rejette en vol.
+      await pool.query('INSERT INTO webhook_deliveries (id, org_id, url, event, payload) VALUES ($1,$2,$3,$4,$5)', [id, orgId, url, event, JSON.stringify(payload)]).catch(() => undefined);
       return;
     }
     for (let attempt = 0; attempt < 6; attempt++) {
@@ -196,11 +197,11 @@ export async function buildServer(o: ServerOptions) {
     ...o.engine,
     fetcher: edgeFetch,
     onFinal: (v, meta) => {
-      void orgOfPos(v.posId).then((org) => { if (org) void deliver(org, `payment.${v.state}`, v); });
+      void orgOfPos(v.posId).then((org) => { if (org) void deliver(org, `payment.${v.state}`, v); }).catch(() => undefined);
       if (meta.fellBackFrom) void status.record(meta.fellBackFrom, false, 0).catch(() => undefined);
       void status.record(v.module, v.state !== 'failed', meta.durationMs).catch(() => undefined);
     },
-    onRefund: (v, amount) => void orgOfPos(v.posId).then((org) => { if (org) void deliver(org, 'payment.refunded', { ...v, amount }); }),
+    onRefund: (v, amount) => void orgOfPos(v.posId).then((org) => { if (org) void deliver(org, 'payment.refunded', { ...v, amount }); }).catch(() => undefined),
   });
 
   // ---------- Démo : un point de vente par pays de lancement, branché sur les simulateurs ----------
