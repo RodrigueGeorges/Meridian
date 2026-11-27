@@ -2,6 +2,7 @@
 // Usage : pnpm tpe 24.50 [--local | --cloud]   (la démo doit tourner : pnpm demo). Montant en ,13 = refus.
 const amount = Math.round(Number(process.argv[2] ?? '24.50') * 100);
 const cloud = process.argv.includes('--cloud');
+if (cloud && process.argv.includes('--local')) { console.error('--local et --cloud sont exclusifs'); process.exit(1); }
 const base = cloud ? 'http://127.0.0.1:8080' : 'http://127.0.0.1:8787';
 const posId = cloud ? 'pos_demo_TPE' : 'caisse-1';
 const headers = { 'content-type': 'application/json', authorization: 'Bearer mk_test_demo0123456789abcdef' };

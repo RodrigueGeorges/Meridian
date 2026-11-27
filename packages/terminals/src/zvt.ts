@@ -14,9 +14,10 @@ function parseStatus(d: Buffer): { result?: number; amount?: number; receipt?: n
   let i = 0;
   while (i < d.length) {
     const b = d[i]!;
-    if (b === 0x27) { out.result = d[i + 1]; i += 2; }
-    else if (b === 0x04) { out.amount = fromBcd(d.subarray(i + 1, i + 7)); i += 7; }
-    else if (b === 0x87) { out.receipt = fromBcd(d.subarray(i + 1, i + 3)); i += 3; }
+    if (b === 0x27) { if (i + 2 > d.length) break; out.result = d[i + 1]; i += 2; }
+    else if (b === 0x04) { if (i + 7 > d.length) break; out.amount = fromBcd(d.subarray(i + 1, i + 7)); i += 7; }
+    else if (b === 0x49) { if (i + 3 > d.length) break; i += 3; } // devise (2 octets BCD) : ignorée, ne pas tronquer la suite
+    else if (b === 0x87) { if (i + 3 > d.length) break; out.receipt = fromBcd(d.subarray(i + 1, i + 3)); i += 3; }
     else if (b === 0x00) i += 1;
     else break;
   }
