@@ -21,7 +21,7 @@ describe('serveur MCP', () => {
     const c = await connect('mk_test_x', []);
     const tools = (await c.listTools()).tools;
     expect(tools.map((t) => t.name).sort()).toEqual([
-      'meridian_get_payment', 'meridian_list_modules', 'meridian_list_pos', 'meridian_payment_journal',
+      'meridian_compare_offers', 'meridian_get_payment', 'meridian_list_modules', 'meridian_list_pos', 'meridian_payment_journal',
       'meridian_status', 'meridian_test_payment', 'meridian_verify_journal',
     ]);
     expect(tools.filter((t) => !t.annotations?.readOnlyHint).map((t) => t.name)).toEqual(['meridian_test_payment']);

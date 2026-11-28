@@ -1,0 +1,16 @@
+EXEMPLE FICTIF — relevé de démonstration Meridian, aucune donnée réelle
+BANQUE EXEMPLE — Relevé mensuel des commissions monétiques
+Commerçant : Boulangerie du Marché (fictif) — Contrat CB n° 0000000
+Période : du 01/10/2026 au 31/10/2026 (31 jours)
+
+Récapitulatif des remises carte
+  Nombre de transactions ............................ 1 284
+  Montant total des transactions .................... 21 870,40 EUR
+  dont cartes d'entreprise .......................... 4 %
+  dont cartes émises hors Espace économique européen  6 %
+
+Commissions
+  Commission proportionnelle (0,95 %) ............... 207,77 EUR HT
+  Frais fixes par transaction (0,07 EUR x 1 284) ..... 89,88 EUR HT
+  Location terminal (1 TPE fixe) .................... 24,90 EUR HT
+  Total des commissions et frais .................... 322,55 EUR HT

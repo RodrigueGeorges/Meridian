@@ -34,7 +34,7 @@ export function createMeridianMcp(o: McpOptions): McpServer {
   const q = encodeURIComponent;
 
   const s = new McpServer({ name: 'meridian', version: '0.1.0' }, {
-    instructions: 'Meridian relie une caisse à tous les PSP par cinq appels : pay, status, cancel, refund, receipt. Montants en unités mineures entières (2450 = 24,50 €). Une référence identifie un paiement : la rejouer ne crée jamais un second débit. Commencez par meridian_list_pos puis meridian_list_modules.',
+    instructions: 'Meridian relie une caisse à tous les PSP par cinq appels : pay, status, cancel, refund, receipt. Montants en unités mineures entières (2450 = 24,50 €). Une référence identifie un paiement : la rejouer ne crée jamais un second débit. Commencez par meridian_list_pos puis meridian_compare_offers pour choisir un PSP.',
   });
 
   s.registerTool('meridian_list_modules', {
@@ -42,6 +42,17 @@ export function createMeridianMcp(o: McpOptions): McpServer {
     description: 'Liste les modules PSP disponibles, avec pays, devises, moyens de paiement et paramètres à fournir.',
     annotations: { readOnlyHint: true },
   }, () => run(() => call('GET', '/v1/modules')));
+
+  s.registerTool('meridian_compare_offers', {
+    title: 'Comparer les offres du catalogue',
+    description: 'Fiches du catalogue pour un pays : rôle (acceptation, acquisition ou les deux), prix publics avec source et date, terminaux, lien d’ouverture de compte et état du connecteur Meridian.',
+    inputSchema: { country: z.string().length(2).describe('Code pays, ex. FR'), need: z.enum(['bundle', 'acceptance', 'acquiring']).optional().describe('bundle = tout-en-un ; acceptance = un terminal en gardant sa banque ; acquiring = un contrat d’acquisition') },
+    annotations: { readOnlyHint: true },
+  }, ({ country, need }) => run(async () => {
+    const all = (await call('GET', '/v1/catalogue')) as { countries: string[]; roles: string[] }[];
+    const c = country.toUpperCase();
+    return all.filter((o) => o.countries.includes(c) && (!need || (need === 'bundle' ? o.roles.length === 2 : o.roles.length === 1 && o.roles[0] === need)));
+  }));
 
   s.registerTool('meridian_status', {
     title: 'Statut des PSP',

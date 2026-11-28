@@ -56,6 +56,13 @@
       const k = el.getAttribute('data-i18n-aria');
       if (dict[k] !== undefined) el.setAttribute('aria-label', dict[k]);
     }
+    // Prix publics du catalogue, au format de la langue (taux en %, frais fixes en euros).
+    for (const el of document.querySelectorAll('.pr[data-rate], .pr[data-fixed]')) {
+      const parts = [];
+      if (el.dataset.rate) parts.push(new Intl.NumberFormat(lang, { style: 'percent', maximumFractionDigits: 2 }).format(Number(el.dataset.rate) / 100));
+      if (el.dataset.fixed) parts.push(new Intl.NumberFormat(lang, { style: 'currency', currency: 'EUR' }).format(Number(el.dataset.fixed)));
+      el.textContent = parts.join(' + ');
+    }
     // Pages légales : français pour FR, anglais pour les autres langues.
     const legal = lang === 'fr' ? { notice: 'mentions-legales.html', privacy: 'confidentialite.html' } : { notice: 'legal-notice.html', privacy: 'privacy.html' };
     if (!STATIC) for (const a of document.querySelectorAll('[data-legal]')) a.setAttribute('href', legal[a.getAttribute('data-legal')]);
@@ -83,7 +90,7 @@
   }
 
   // ---------- Navigation ----------
-  const VIEWS = ['home', 'software', 'psp', 'demo'];
+  const VIEWS = ['home', 'software', 'resellers', 'psp', 'demo'];
   function route() {
     if (STATIC) return;
     const v = (location.hash.match(/^#\/?(\w+)/) ?? [])[1] ?? 'home';
@@ -293,6 +300,37 @@
   let calcUpdate = () => undefined;
 
   // ---------- Démo ----------
+  // Démo IA : l'exemple fictif de relevé, lu par Mistral AI quand le serveur a une clé ; sinon chiffres enregistrés, présentés comme tels.
+  const aiRun = document.getElementById('aiRun');
+  if (aiRun) aiRun.addEventListener('click', async () => {
+    const eur = (n) => new Intl.NumberFormat(lang, { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n);
+    const mode = document.getElementById('aiMode'), list = document.getElementById('aiOffers');
+    aiRun.disabled = true; mode.textContent = t('v14.ai.reading'); list.replaceChildren();
+    let d = null;
+    try {
+      const r = await fetch('/v1/demo/statement', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"country":"FR"}', signal: AbortSignal.timeout(60000) });
+      if (r.status === 429) { mode.textContent = t('demo.rate'); aiRun.disabled = false; return; }
+      if (r.ok) d = await r.json();
+    } catch { /* aperçu statique : résultat enregistré */ }
+    d ??= await fetch(page.recordedStatement ?? 'demo-statement-recorded.json').then((r) => r.json()).catch(() => null);
+    aiRun.disabled = false;
+    if (!d) { mode.textContent = t('v14.ai.err'); return; }
+    mode.textContent = d.method === 'ai' ? t('v14.ai.mode.ai', { model: d.model }) : t('v14.ai.mode.manual');
+    const days = d.facts.periodDays || 30, k = 30 / days;
+    document.getElementById('aiVol').textContent = eur(d.facts.cardVolume * k);
+    document.getElementById('aiTx').textContent = new Intl.NumberFormat(lang).format(Math.round(d.facts.transactions * k));
+    document.getElementById('aiCur').textContent = eur(d.result.current);
+    document.getElementById('aiFacts').hidden = false;
+    for (const e of d.result.estimates.slice(0, 4)) {
+      const li = document.createElement('li');
+      const a = document.createElement('span'); a.className = 'nm'; a.textContent = e.name;
+      const b = document.createElement('span'); b.textContent = e.monthly == null ? t('v14.ai.quote') : t('v14.ai.month', { v: eur(e.monthly) });
+      const c = document.createElement('span'); c.className = 'sv' + (e.savings == null || e.savings <= 0 ? ' neg' : '');
+      c.textContent = e.savings == null ? '' : e.savings > 0 ? t('v14.ai.save', { v: eur(e.savings) }) : t('v14.ai.more', { v: eur(-e.savings) });
+      li.append(a, b, c); list.append(li);
+    }
+  });
+
   let recorded = null;
   let live = null; // null = inconnu, true = API joignable, false = exécution enregistrée
   let lastRun = null;
@@ -413,6 +451,92 @@
     }
   }
 
+
+  // ---------- Démo « terminal du magasin » ----------
+  let tdRecorded = null;
+  let tdLive = null;
+  function initTabs() {
+    const tabs = [...document.querySelectorAll('.tabs [role=tab]')];
+    const show = (tab, focus) => {
+      for (const x of tabs) {
+        const on = x === tab;
+        x.setAttribute('aria-selected', String(on));
+        x.tabIndex = on ? 0 : -1;
+        $(x.getAttribute('aria-controls')).hidden = !on;
+      }
+      if (focus) tab.focus();
+    };
+    tabs.forEach((tab, i) => {
+      tab.addEventListener('click', () => show(tab, false));
+      tab.addEventListener('keydown', (ev) => {
+        const d = ev.key === 'ArrowRight' ? 1 : ev.key === 'ArrowLeft' ? -1 : 0;
+        if (d) { ev.preventDefault(); show(tabs[(i + d + tabs.length) % tabs.length], true); }
+      });
+    });
+  }
+  function tdPath(mode, hop, err) {
+    for (const li of document.querySelectorAll('#tdPath li')) {
+      li.classList.toggle('off', mode === 'local' && li.dataset.hop === 'meridian');
+      li.classList.toggle('on', li.dataset.hop === hop && !err);
+      li.classList.toggle('err', li.dataset.hop === hop && !!err);
+    }
+  }
+  async function runTerminal() {
+    const btn = $('tdRun');
+    const mode = document.querySelector('input[name=tdMode]:checked')?.value ?? 'cloud';
+    const incident = document.querySelector('input[name=tdInc]:checked')?.value ?? 'none';
+    const st = $('tdState'), log = $('tdLog');
+    btn.disabled = true;
+    log.replaceChildren();
+    for (const id of ['tdOrders', 'tdDebits', 'tdTime']) { $(id).textContent = '—'; $(id).className = ''; }
+    st.className = 'pill run'; st.textContent = t('demo.running');
+    tdPath(mode, null);
+    try {
+      let run;
+      if (tdLive !== false) {
+        try {
+          const r = await fetch('/v1/demo/terminal', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode, incident }), signal: AbortSignal.timeout(30000) });
+          if (r.status === 429) throw Object.assign(new Error('rate'), { rate: true });
+          if (!r.ok) throw new Error(String(r.status));
+          run = await r.json();
+          tdLive = true;
+        } catch (e) {
+          if (e.rate) { st.className = 'pill no'; st.textContent = t('demo.rate'); return; }
+          tdLive = false;
+        }
+      }
+      if (!run) {
+        tdRecorded ??= await fetch(page.recordedTerminal ?? 'demo-terminal-recorded.json').then((r) => r.json());
+        run = tdRecorded[`${mode}:${incident}`];
+      }
+      $('tdMode').textContent = tdLive === false ? t('td.rec') : '';
+      const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      let prev = 0;
+      for (const e of run.steps) {
+        if (!reduce) await new Promise((r) => setTimeout(r, Math.max(380, Math.min(1400, e.ms - prev))));
+        prev = e.ms;
+        const bad = e.kind === 'reply_lost' || e.kind === 'tpe_busy' || e.kind === 'other_till' || e.kind === 'status_in_progress';
+        tdPath(run.mode, e.hop, bad);
+        const li = document.createElement('li');
+        li.className = bad ? 'warn' : e.kind.startsWith('final_') ? 'fin' : '';
+        const a = document.createElement('span'); a.textContent = sec(Math.max(0, e.ms));
+        const b = document.createElement('span'); b.textContent = dict[`td.k.${e.kind}`] ?? e.kind;
+        li.append(a, b);
+        log.append(li);
+        requestAnimationFrame(() => li.classList.add('in'));
+      }
+      const fin = { authorized: 'ok', declined: 'no', cancelled: 'no' }[run.state] ?? 'run';
+      st.className = `pill ${fin}`; st.textContent = dict[`td.s.${run.state}`] ?? run.state;
+      $('tdOrders').textContent = String(run.orders); $('tdOrders').className = run.orders === 1 ? 'one' : '';
+      $('tdDebits').textContent = String(run.debits); $('tdDebits').className = run.debits === 1 ? 'one' : '';
+      $('tdTime').textContent = sec(run.durationMs).slice(1);
+    } catch {
+      st.className = 'pill no'; st.textContent = t('demo.error');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
     $('lang').addEventListener('change', (ev) => {
       const l = ev.target.value;
@@ -422,6 +546,8 @@
       location.href = alt ? new URL(alt.getAttribute('href'), location.href).pathname : `/${l}/`;
     });
     $('run')?.addEventListener('click', () => { track('demo'); void runDemo(); });
+    $('tdRun')?.addEventListener('click', () => { track('demo_terminal'); void runTerminal(); });
+    initTabs();
     initContact();
     initStore();
     initConnect();

@@ -89,7 +89,7 @@ export class TerminalService {
         Object.assign(r, { state: res.state, detail: res.detail, brand: res.brand, last4: res.last4, terminalRef: res.terminalRef });
       }, (e: unknown) => {
         // Rien n'a pu partir vers le terminal : refus certain, sans débit possible.
-        if (e instanceof LinkError && e.beforeSend) Object.assign(r, { state: 'declined', detail: 'terminal_unreachable' });
+        if (e instanceof LinkError && e.beforeSend) Object.assign(r, { state: 'declined', detail: e.code ?? 'terminal_unreachable' });
         else Object.assign(r, { state: 'unknown', detail: 'terminal_link_lost' });
       }).finally(() => { if (this.busy === reference) this.busy = undefined; this.save(); });
       return { status: 201, body: this.view(r) };

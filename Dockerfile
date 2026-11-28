@@ -17,6 +17,7 @@ COPY apps/sim/package.json apps/sim/
 COPY apps/portal/package.json apps/portal/
 COPY packages/mcp/package.json packages/mcp/
 COPY packages/terminals/package.json packages/terminals/
+COPY packages/ai/package.json packages/ai/
 COPY apps/edge/package.json apps/edge/
 
 # Deps de production seulement : ni vitest ni fast-check dans l'image finale.

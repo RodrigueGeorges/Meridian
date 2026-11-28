@@ -11,11 +11,13 @@
     "@fastify/helmet": "^13",
     "@fastify/static": "^10.1.12",
     "@fastify/websocket": "^11",
+    "@meridian/ai": "workspace:*",
     "@meridian/bridges": "workspace:*",
     "@meridian/core": "workspace:*",
     "@meridian/engine": "workspace:*",
     "@meridian/modules": "workspace:*",
     "@meridian/store-pg": "workspace:*",
+    "@meridian/terminals": "workspace:*",
     "fastify": "^5.2.0",
     "zod": "^4.6.7"
   }

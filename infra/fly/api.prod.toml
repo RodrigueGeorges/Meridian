@@ -2,7 +2,7 @@
 # fly launch --config infra/fly/api.prod.toml --no-deploy
 # fly secrets set --config infra/fly/api.prod.toml DATABASE_URL=… JOURNAL_KEY=… MASTER_KEY=… BOOTSTRAP_API_KEY=mk_live_$(openssl rand -hex 16) PUBLIC_URL=…
 # fly scale count 1 --config infra/fly/api.prod.toml   (voir la note multi-instance ci-dessous)
-app = "meridian-api"
+app = "meridian-2ejyig"
 primary_region = "cdg"
 
 [build]

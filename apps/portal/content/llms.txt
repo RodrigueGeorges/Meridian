@@ -1,8 +1,8 @@
 # Meridian
 
-> Meridian est la couche paiement des éditeurs de logiciels de caisse et de bornes en Europe : une intégration (cinq appels REST ou les protocoles Concert, ZVT et nexo Retailer) relie la caisse à tous les PSP du catalogue. Le PSP garde le contrat, le KYC, les fonds et sa commission ; Meridian transporte les instructions, jamais l'argent. Chaque paiement est écrit dans un journal chaîné et signé avant l'appel au PSP : zéro double débit, même en cas de coupure réseau.
+> Meridian est le catalogue de paiement des caisses et des bornes en Europe : une intégration (cinq appels REST ou les protocoles Concert, ZVT et nexo Retailer) relie la caisse à tous les PSP du catalogue. Le PSP garde le contrat, le KYC, les fonds et sa commission ; Meridian transporte les instructions, jamais l'argent. Chaque paiement est écrit dans un journal chaîné et signé avant l'appel au PSP : zéro double débit, même en cas de coupure réseau.
 
-État au lancement : Stripe Terminal est disponible ; les autres PSP sont prévus, sans partenariat à ce jour. Pays : France, Belgique, Pays-Bas, Allemagne, Espagne, Italie, Autriche, Suisse. Meridian est un connecteur et un catalogue : l'éditeur ou le marchand choisit son PSP dans le catalogue et le branche sur la caisse, avec un PSP de secours facultatif si le premier est injoignable. Meridian ne choisit jamais le PSP à la place du marchand : ce n'est pas un orchestrateur.
+État au lancement : Stripe Terminal est disponible ; les autres PSP sont prévus, sans partenariat à ce jour. Pays : France, Belgique, Pays-Bas, Allemagne, Espagne, Italie, Autriche, Suisse. Meridian est un connecteur et un catalogue : le marchand compare les PSP sur leurs prix publics et leurs fonctions, garde sa banque ou choisit le tout-en-un, ouvre son compte chez le PSP (qui garde le contrat, le KYC et les fonds) et le branche sur la caisse, avec un PSP de secours facultatif si le premier est injoignable. Meridian ne choisit jamais le PSP à la place du marchand : ce n'est pas un orchestrateur.
 
 Modes de branchement : PSP dans le cloud ; TPE du magasin en local par l'agent Meridian (Caisse-AP sur IP, ZVT, nexo ; API locale identique sur 127.0.0.1:8787) ; TPE du magasin depuis une caisse en ligne (API cloud relayée à l'agent par une connexion sortante) ; caisse existante sans développement (passerelles Concert, ZVT, nexo) ; Tap to Pay sur l'appareil.
 
@@ -16,6 +16,8 @@ Modes de branchement : PSP dans le cloud ; TPE du magasin en local par l'agent M
 - `POST /v1/payments/{reference}/refunds` {posId, amount, refundNumber?} : rembourser
 - `GET /v1/payments/{reference}/receipt?posId=` : reçu avec preuve signée
 - `PUT /v1/pos/{id}/psp` {primary, fallback?} : brancher le PSP choisi dans le catalogue
+- `GET /v1/catalogue` (public) : fiches du catalogue (rôle acceptation / acquisition, prix publics avec source et date, terminaux, lien d'ouverture de compte, état du connecteur)
+- `POST /v1/catalogue/estimate` (public) : coût mensuel estimé chez chaque offre ; `POST /v1/ai/statement`, `/v1/ai/advisor`, `/v1/ai/explain` : lecture d'un relevé, conseiller en langage naturel, explication d'un paiement (IA autour du paiement, jamais dans le paiement ; Mistral AI par défaut, point d'accès européen) ; `POST /v1/demo/statement` (public) : démo sur un relevé fictif
 - `GET /v1/modules`, `GET /v1/status` (public), `GET /v1/journal/verify`, `GET /v1/edge/agents`
 
 ## Documentation

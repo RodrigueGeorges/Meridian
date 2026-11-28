@@ -1,5 +1,5 @@
 // Lancement de l'agent du magasin.
-//   TERMINAL=caisse-ap|zvt|nexo  TERMINAL_HOST=192.168.1.50  TERMINAL_PORT=8888   (nexo : TERMINAL_URL, TERMINAL_POIID)
+//   TERMINAL=caisse-ap|zvt|nexo  TERMINAL_HOST=192.168.1.50  TERMINAL_PORT=8888   (nexo : TERMINAL_URL, TERMINAL_POIID, TERMINAL_SESSION=1 si le terminal exige un Login)
 //   COUNTRY=FR  DATA_DIR=./meridian-edge  LOCAL_PORT=8787  LOCAL_TOKEN=…            (API locale, 127.0.0.1 seulement)
 //   MERIDIAN_URL=https://…  MERIDIAN_API_KEY=mk_…  MERIDIAN_AGENT_ID=magasin-paris-1  (relais cloud, facultatif)
 import { driverFromEnv, startAgent } from './agent.ts';

@@ -12,6 +12,7 @@ export * from './schema.ts';
 export * from './template.ts';
 export * from './http.ts';
 export * from './runtime.ts';
+export * from './offers.ts';
 
 /** Catalogue des modules livrés avec le dépôt (validés au chargement). */
 export const BUILTIN_MODULES: Record<string, ModuleDef> = Object.fromEntries(

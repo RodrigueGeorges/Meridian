@@ -1,5 +1,6 @@
 // Bout en bout : SDK → API → moteur → simulateurs. En mémoire, puis sur PostgreSQL si DATABASE_URL est défini.
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { createLlm } from '@meridian/ai';
 import { Meridian, MeridianApiError } from '../../../packages/sdk-js/src/index.ts';
 import { startSims } from '@meridian/sim';
 import { pg } from '@meridian/store-pg';
@@ -27,6 +28,7 @@ for (const mode of ['memory', 'postgres'] as const) {
         demoSeed: { stripeUrl: sims.stripeUrl, secoursUrl: sims.secoursUrl },
         engine: { pollMs: 40, retryMs: 60 },
         metricsToken: 'metrics-test-token',
+        ai: createLlm({}),
       });
       await server.app.listen({ port: 0, host: '127.0.0.1' });
       base = `http://127.0.0.1:${(server.app.server.address() as { port: number }).port}`;
@@ -75,9 +77,44 @@ for (const mode of ['memory', 'postgres'] as const) {
       expect((await fetch(`${base}/v1/demo/run`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"scenario":"rm -rf"}' })).status).toBe(400);
     });
 
+    it('catalogue public : fiches sourcées, rôle acceptation / acquisition, état réel du connecteur', async () => {
+      const list = await (await fetch(`${base}/v1/catalogue`)).json();
+      const by = (id: string) => list.find((o: { id: string }) => o.id === id);
+      expect(by('stripe-terminal')).toMatchObject({ status: 'available', roles: ['acceptance', 'acquiring'], pricing: { model: 'blended' } });
+      expect(by('sumup-solo').status).toBe('preview');
+      expect(by('viva').status).toBe('planned');
+      expect(by('store-terminal').roles).toEqual(['acceptance']);
+      expect(by('bank-acquiring')).toMatchObject({ status: 'external', roles: ['acquiring'], pricing: { model: 'quote' } });
+      for (const o of list) if (o.pricing.model === 'blended') expect(o.pricing.source).toMatch(/^https:\/\//);
+    });
+
+    it('IA : estimation publique déterministe ; sans clé de modèle, 503 explicite ; journal expliqué par les faits', async () => {
+      const est = await (await fetch(`${base}/v1/catalogue/estimate`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ profile: { country: 'FR', monthlyVolume: 20000, avgTicket: 25, businessShare: 0, nonEeaShare: 0 }, current: { monthlyCost: 400 } }) })).json();
+      expect(est.estimates.find((e: { id: string }) => e.id === 'stripe-terminal')).toMatchObject({ monthly: 360, savings: 40 });
+      const h = { authorization: `Bearer ${KEY}`, 'content-type': 'application/json' };
+      expect(await (await fetch(`${base}/v1/console/config`)).json()).toEqual({ demoKey: KEY });
+      const demo = await (await fetch(`${base}/v1/demo/statement`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })).json();
+      expect(demo.method).toBe('manual');
+      expect(demo.facts.cardVolume).toBe(21870.4);
+      expect(demo.result.estimates[0].savings).toBeGreaterThan(0);
+      const adv = await fetch(`${base}/v1/ai/advisor`, { method: 'POST', headers: h, body: JSON.stringify({ country: 'FR', text: 'Boulangerie, 15 000 € par mois' }) });
+      expect([adv.status, (await adv.json()).error.code]).toEqual([503, 'ai_unavailable']);
+      expect((await fetch(`${base}/v1/ai/advisor`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })).status).toBe(401);
+      await fetch(`${base}/v1/payments`, { method: 'POST', headers: h, body: JSON.stringify({ posId: 'pos_demo_FR', reference: `AI-EXPL-${mode}`, amount: 1200, currency: 'EUR', waitMs: 8000 }) });
+      const ex = await (await fetch(`${base}/v1/ai/explain`, { method: 'POST', headers: h, body: JSON.stringify({ posId: 'pos_demo_FR', reference: `AI-EXPL-${mode}` }) })).json();
+      expect(ex.method).toBe('facts');
+      expect(ex.facts[0]).toContain(`AI-EXPL-${mode}`);
+    });
+
+    it('démo terminal : vrai agent, TPE simulé, réponse perdue sans double ordre', async () => {
+      const r = await (await fetch(`${base}/v1/demo/terminal`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"mode":"cloud","incident":"lost_reply"}' })).json();
+      expect(r).toMatchObject({ state: 'authorized', orders: 1, debits: 1 });
+      expect((await fetch(`${base}/v1/demo/terminal`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"mode":"x","incident":"none"}' })).status).toBe(400);
+    });
+
     it('contact : enregistre une demande valide, refuse un e-mail invalide et le champ piège', async () => {
       const post = (b: unknown) => fetch(`${base}/v1/contact`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) });
-      const ok = { role: 'software', name: 'Ada Martin', company: 'Caisse Lab', email: 'ada@caisselab.example', country: 'FR', lang: 'fr' };
+      const ok = { role: 'reseller', name: 'Ada Martin', company: 'Caisse Lab', email: 'ada@caisselab.example', country: 'FR', lang: 'fr' };
       expect((await post(ok)).status).toBe(201);
       expect((await post({ ...ok, email: 'pas-un-email' })).status).toBe(400);
       expect((await post({ ...ok, website: 'http://spam' })).status).toBe(400);
@@ -262,7 +299,7 @@ for (const mode of ['memory', 'postgres'] as const) {
       expect(de).not.toContain('data-view="home"');
       const css = de.match(/href="(\/assets\/site\.[0-9a-f]+\.css)"/)![1]!;
       expect((await fetch(`${base}${css}`)).headers.get('cache-control')).toContain('immutable');
-      for (const p of ['/fr/editeurs/', '/en/pos-software/', '/it/demo/', '/nl/psp/', '/fr/securite/', '/en/developers/', '/fr/contact/', '/en/zvt-protocol/', '/fr/mentions-legales/', '/en/privacy/']) {
+      for (const p of ['/fr/editeurs/', '/fr/distributeurs/', '/de/haendler/', '/en/pos-software/', '/it/demo/', '/nl/psp/', '/fr/securite/', '/en/developers/', '/fr/contact/', '/en/zvt-protocol/', '/fr/mentions-legales/', '/en/privacy/']) {
         expect((await fetch(`${base}${p}`)).status, p).toBe(200);
       }
       const root = await fetch(`${base}/`, { redirect: 'manual', headers: { 'accept-language': 'es-ES,es;q=0.9' } });
@@ -272,7 +309,7 @@ for (const mode of ['memory', 'postgres'] as const) {
       expect((await fetch(`${base}/fr/nexistepas/`, { headers: { accept: 'text/html' } })).status).toBe(404);
       expect((await fetch(`${base}/portal/console.html`)).status).toBe(200);
       const map = await (await fetch(`${base}/sitemap.xml`)).text();
-      expect(map.match(/<url>/g)!.length).toBe(46);
+      expect(map.match(/<url>/g)!.length).toBe(52);
       expect(await (await fetch(`${base}/robots.txt`)).text()).toContain(`Sitemap: ${base}/sitemap.xml`);
       expect(await (await fetch(`${base}/.well-known/security.txt`)).text()).toMatch(/^Contact: mailto:security@/);
     });
