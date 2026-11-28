@@ -33,7 +33,7 @@
   const time = (iso) => new Date(iso).toLocaleString(lang, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
   const notice = (msg) => { const n = $('notice'); n.textContent = msg || ''; n.hidden = !msg; };
   const badge = (state, label) => el('span', { class: `badge b-${state}` }, label ?? t(`state.${state}`));
-  const modName = (id) => modules.find((m) => m.id === id)?.name || id;
+  const modName = (id) => dict[`mod.${id}`] ?? offers.find((o) => o.module === id && o.id !== 'store-terminal')?.name ?? modules.find((m) => m.id === id)?.name ?? id;
   const colon = () => (lang === 'fr' ? ' : ' : ': ');
   const posById = (id) => posList.find((p) => p.id === id);
 
@@ -50,6 +50,7 @@
     document.documentElement.lang = lang;
     $('lang').value = lang;
     document.querySelectorAll('[data-i18n]').forEach((n) => { n.textContent = t(n.dataset.i18n); });
+    document.querySelectorAll('[data-i18n-ph]').forEach((n) => { n.placeholder = t(n.dataset.i18nPh); });
     $('ovStatusLink').href = lang === 'fr' ? '/fr/statut/' : '/en/status/';
   }
 
@@ -154,7 +155,10 @@
       $('payRows').replaceChildren(...(rows.length ? rows.map(payRow) : [el('tr', {}, el('td', { colspan: '5', class: 'empty' }, t('payments.empty')))]));
     } catch (e) { notice(e.message); }
   }
+  let jCurrent;
   async function showJournal(posId, ref) {
+    jCurrent = { posId, ref };
+    $('jText').hidden = true;
     if (location.hash !== '#payments') { location.hash = '#payments'; }
     try {
       const list = await api('GET', `/v1/payments/${encodeURIComponent(ref)}/journal?posId=${encodeURIComponent(posId)}`);
@@ -168,6 +172,16 @@
     } catch (e) { notice(e.message); }
   }
   $('jClose').addEventListener('click', () => { $('journal').hidden = true; });
+  $('jExplain').addEventListener('click', async () => {
+    if (!jCurrent) return;
+    const b = $('jExplain'); b.disabled = true;
+    const box = $('jText'); box.hidden = false; box.replaceChildren(el('p', { class: 'small' }, t('j.explaining')));
+    try {
+      const r = await api('POST', '/v1/ai/explain', { posId: jCurrent.posId, reference: jCurrent.ref, lang });
+      box.replaceChildren(el('p', { class: 'small' }, r.method === 'ai' ? t('j.method.ai', { model: r.model }) : t('j.method.facts')), el('p', { class: 'expl' }, r.explanation));
+    } catch (e) { box.replaceChildren(el('p', { class: 'small' }, e.message)); }
+    b.disabled = false;
+  });
   $('payState').addEventListener('change', loadPayments);
   $('verifyBtn').addEventListener('click', async () => {
     try { const v = await api('GET', '/v1/journal/verify'); $('verifyOut').textContent = v.ok ? t('payments.intact', { n: v.count }) : t('payments.broken', { n: v.brokenAt }); } catch (e) { notice(e.message); }
@@ -232,13 +246,14 @@
   }
   const availFor = (p) => modules.filter((m) => m.capabilities.countries.includes(p.country) && m.capabilities.currencies.includes(p.currency));
   const modOption = (m) => el('option', { value: m.id }, m.maturity === 'preview' ? `${m.name} · ${t('cat.preview')}` : m.name);
-  function openPsp(p) {
+  function openPsp(p, preselect) {
     pspPos = p;
     $('pspPosName').textContent = p.label;
     const avail = availFor(p);
     $('primarySel').replaceChildren(...avail.map(modOption));
     $('fallbackSel').replaceChildren(el('option', { value: '' }, t('pos.none')), ...avail.map(modOption));
     if (p.primaryModule) $('primarySel').value = p.primaryModule;
+    if (preselect && avail.some((m) => m.id === preselect)) $('primarySel').value = preselect;
     $('fallbackSel').value = p.fallbackModule || '';
     const sync = () => {
       fields($('primaryFields'), modules.find((m) => m.id === $('primarySel').value), 'p');
@@ -276,19 +291,123 @@
     try { await api('POST', '/v1/pos', { label: $('posLabel').value, country: $('posCountry').value }); $('posLabel').value = ''; loadPos(); } catch (e) { notice(e.message); }
   });
 
-  // ---------- Catalogue ----------
-  function renderCatalog() {
-    const c = $('catCountry').value;
-    const local = new Set(countries[c]?.localSchemes || []);
-    const list = modules.filter((m) => m.capabilities.countries.includes(c) && !m.id.startsWith('psp-secours'));
-    $('catList').replaceChildren(...(list.length ? list.map((m) => el('article', { class: 'card' },
-      el('div', { class: 'ph' }, el('h2', {}, m.name), m.maturity === 'preview' ? badge('preview', t('cat.preview')) : badge('ok', t('cat.available'))),
-      el('span', { class: 'small' }, t(`kind.${m.kind}`)),
-      el('div', { class: 'chips' }, ...methodsFor(m, c).map((x) => el('span', { class: local.has(x) ? 'chip local' : 'chip' }, x))),
-      el('span', { class: 'small' }, t('catalog.currencies', { list: m.capabilities.currencies.join(', ') })),
-      m.maturity === 'preview' ? el('span', { class: 'small' }, t('cat.previewNote')) : null,
-    )) : [el('p', { class: 'empty' }, t('catalog.empty'))]));
+  // ---------- Catalogue : comparer, choisir, ouvrir le compte, brancher ----------
+  let offers = [];
+  const LOGOS = { 'stripe-terminal': 'stripe', 'sumup-solo': 'sumup', 'square-terminal': 'square', 'adyen-terminal': 'adyen', viva: 'viva' };
+  const num = (n, max = 2) => new Intl.NumberFormat(lang, { maximumFractionDigits: max }).format(n);
+  const eur = (n) => new Intl.NumberFormat(lang, { style: 'currency', currency: 'EUR', minimumFractionDigits: n % 1 ? 2 : 0 }).format(n);
+  function priceLine(l) {
+    const parts = [];
+    if (l.rate !== undefined) parts.push(`${num(l.rate)} %`);
+    if (l.fixed !== undefined) parts.push(eur(l.fixed));
+    const price = parts.join(' + ');
+    const month = l.monthly !== undefined ? t('cat2.monthly', { v: eur(l.monthly) }) : '';
+    return el('li', {}, el('span', {}, t(`cat2.p.${l.key}`)), el('b', {}, [price, month].filter(Boolean).join(' · ')));
   }
+  function pricing(o) {
+    const p = o.pricing;
+    if (p.model === 'blended') return [el('ul', { class: 'prices' }, ...p.lines.map(priceLine)),
+      el('p', { class: 'small' }, p.note ? `${t(`cat2.note.${p.note}`)} ` : '', el('a', { href: p.source, target: '_blank', rel: 'noopener' }, t('cat2.source', { d: new Date(p.checkedAt).toLocaleDateString(lang) })))];
+    if (p.model === 'icpp' || p.model === 'grid') return [el('p', { class: 'small' }, t(`cat2.m.${p.model}`), ' ', el('a', { href: p.source, target: '_blank', rel: 'noopener' }, t('cat2.grid')))];
+    return [el('p', { class: 'small' }, t(`cat2.m.${p.model}`))];
+  }
+  function plug(o) {
+    const pos = posById($('catPos').value);
+    if (!pos) { notice(t('cat2.noPos')); return; }
+    location.hash = '#pos';
+    setTimeout(() => openPsp(pos, o.module), 0);
+  }
+  function renderCatalog() {
+    const c = $('catCountry').value, role = $('catRole').value;
+    const fits = (o) => o.countries.includes(c) && (!role || (role === 'bundle' ? o.roles.length === 2 : o.roles.length === 1 && o.roles[0] === role));
+    const list = offers.filter(fits);
+    const st = { available: ['ok', 'cat.available'], preview: ['preview', 'cat.preview'], planned: ['none', 'cat2.s.planned'], external: ['none', 'cat2.s.external'] };
+    $('catList').replaceChildren(...(list.length ? list.map((o) => {
+      const canPlug = o.module && (o.status === 'available' || o.status === 'preview');
+      return el('article', { class: 'card offer' },
+        el('div', { class: 'ph' }, el('h2', {}, LOGOS[o.id] ? el('img', { class: 'plogo', src: `logos/${LOGOS[o.id]}.svg`, alt: '', width: '20', height: '20' }) : null, o.id === 'store-terminal' || o.id === 'bank-acquiring' ? t(`cat2.o.${o.id}`) : o.name), badge(st[o.status][0], o.id === 'store-terminal' && o.status === 'preview' ? t('cat2.s.validation') : t(st[o.status][1]))),
+        el('div', { class: 'chips' }, ...o.roles.map((r) => el('span', { class: 'chip local' }, t(`kind.${r === 'acceptance' ? 'acceptance' : 'acquiring'}`)))),
+        ...pricing(o),
+        o.features.length ? el('div', { class: 'chips' }, ...o.features.map((f) => el('span', { class: 'chip' }, t(`cat2.f.${f}`)))) : null,
+        o.terminals.length ? el('p', { class: 'small' }, `${t('cat2.terminals')}${colon()}`, o.terminals.map((x) => x.price ? `${x.name} (${t('cat2.ht', { v: eur(x.price) })})` : x.name).join(', ')) : null,
+        el('div', { class: 'bar' },
+          canPlug ? el('button', { class: 'primary', type: 'button', onclick: () => plug(o) }, t('cat2.plug')) : null,
+          o.account ? el('a', { class: 'btnlink', href: o.account, target: '_blank', rel: 'noopener' }, t('cat2.open')) : null));
+    }) : [el('p', { class: 'empty' }, t('catalog.empty'))]));
+  }
+
+  // ---------- Estimation du coût : description (IA), facture (IA), saisie (calcul seul) ----------
+  const eur0 = (n) => new Intl.NumberFormat(lang, { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n);
+  const eur2 = (n) => new Intl.NumberFormat(lang, { style: 'currency', currency: 'EUR' }).format(n);
+  function renderEstimate(r, head = []) {
+    const out = $('estOut');
+    const res = r.result ?? r;
+    const rows = res.estimates.map((e) => {
+      const offer = offers.find((o) => o.id === e.id);
+      const name = offer && (offer.id === 'store-terminal' || offer.id === 'bank-acquiring') ? t(`cat2.o.${offer.id}`) : e.name;
+      const diff = e.savings === null || e.savings === undefined ? '' : e.savings >= 0 ? t('est.save', { v: eur0(e.savings) }) : t('est.more', { v: eur0(-e.savings) });
+      const detail = e.monthly === null ? t(`cat2.m.${e.reason}`)
+        : [e.plan ? t('est.plan', { p: t(`cat2.p.${e.plan === 'plus' ? 'plan' : 'payg'}`) }) : '', t('est.pct', { v: eur2(e.breakdown.percent) }), e.breakdown.fixed ? t('est.fixed', { v: eur2(e.breakdown.fixed) }) : '', e.breakdown.subscription ? t('est.sub', { v: eur2(e.breakdown.subscription) }) : '', e.approx ? t('est.approx') : ''].filter(Boolean).join(' · ');
+      return el('tr', {}, el('td', {}, LOGOS[e.id] ? el('img', { class: 'plogo', src: `logos/${LOGOS[e.id]}.svg`, alt: '', width: '16', height: '16' }) : null, ' ', name),
+        el('td', { class: 'num' }, e.monthly === null ? '—' : eur0(e.monthly)),
+        el('td', { class: e.savings > 0 ? 'num good' : 'num' }, diff), el('td', { class: 'small' }, detail));
+    });
+    out.replaceChildren(...head,
+      res.current !== null && res.current !== undefined ? el('p', {}, el('strong', {}, t('est.current', { v: eur0(res.current) })), ' ', el('span', { class: 'small' }, t('est.tx', { n: String(res.transactions) }))) : el('p', { class: 'small' }, t('est.tx', { n: String(res.transactions) })),
+      el('div', { class: 'scroll', tabindex: '0' }, el('table', { class: 'tbl' }, el('thead', {}, el('tr', {}, ...['est.col.offer', 'est.col.cost', 'est.col.diff', 'est.col.detail'].map((k, i) => el('th', { class: i === 1 || i === 2 ? 'num' : '' }, t(k))))), el('tbody', {}, ...rows))),
+      el('p', { class: 'small' }, t('est.hw')));
+  }
+  async function aiStatus() {
+    try {
+      const s = await api('GET', '/v1/ai/status');
+      for (const b of document.querySelectorAll('button.ai')) b.disabled = !s.enabled;
+      $('estAi').hidden = s.enabled; if (!s.enabled) $('estAi').textContent = t('est.aiOff');
+    } catch { /* clé absente : la vue s'en charge */ }
+  }
+  const busy = (form, on) => { for (const b of form.querySelectorAll('button')) b.disabled = on; if (on) $('estOut').replaceChildren(el('p', { class: 'small' }, t('est.reading'))); };
+  $('estManual').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    try {
+      renderEstimate(await api('POST', '/v1/catalogue/estimate', { profile: { country: $('catCountry').value, monthlyVolume: Number($('estVol').value), avgTicket: Number($('estTicket').value), terminals: Number($('estTerms').value), nonEeaShare: Number($('estForeign').value) / 100 } }));
+    } catch (e) { notice(e.message); }
+  });
+  $('estDescribe').addEventListener('submit', async (ev) => {
+    ev.preventDefault(); busy(ev.target, true);
+    try {
+      const r = await api('POST', '/v1/ai/advisor', { country: $('catCountry').value, text: $('estText').value });
+      if (!r.result) $('estOut').replaceChildren(el('p', {}, t('est.missing')), el('ul', {}, ...r.missing.map((q) => el('li', {}, q))));
+      else renderEstimate(r, [el('p', {}, t('est.understood', { v: eur0(r.profile.monthlyVolume), f: String(Math.round(r.profile.nonEeaShare * 100)), n: String(r.profile.terminals) })), el('p', { class: 'small' }, t('est.byModel', { model: r.model })), r.profile.needs.length ? el('div', { class: 'chips' }, ...r.profile.needs.map((n) => el('span', { class: 'chip local' }, t(`cat2.f.${n}`)))) : null].filter(Boolean));
+    } catch (e) { $('estOut').replaceChildren(el('p', { class: 'small' }, e.message)); }
+    busy(ev.target, false); aiStatus();
+  });
+  let sampleText = null;
+  $('estSample').addEventListener('click', async () => {
+    sampleText = await (await fetch('exemples/releve-fictif.txt')).text();
+    $('estDoc').value = '';
+    $('estFile').requestSubmit();
+  });
+  $('estFile').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const f = $('estDoc').files[0];
+    if (!f && !sampleText) { notice(t('est.pick')); return; }
+    busy(ev.target, true);
+    try {
+      let body;
+      if (f) {
+        const buf = new Uint8Array(await f.arrayBuffer());
+        let bin = ''; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+        body = { country: $('catCountry').value, file: { type: f.type || 'application/octet-stream', base64: btoa(bin) } };
+      } else body = { country: $('catCountry').value, text: sampleText };
+      sampleText = null;
+      const r = await api('POST', '/v1/ai/statement', body);
+      const x = r.facts;
+      const read = t('est.read', { provider: x.provider ?? '—', volume: eur0(r.profile.monthlyVolume), tx: String(r.result.transactions) });
+      renderEstimate(r, [el('p', {}, read, ' ', badge(x.confidence === 'high' ? 'ok' : x.confidence === 'medium' ? 'preview' : 'none', t(`est.conf.${x.confidence}`))),
+        el('p', { class: 'small' }, t('est.byModel', { model: r.ocr ? `${r.ocr} + ${r.model}` : r.model })),
+        x.notes.length ? el('ul', { class: 'small' }, ...x.notes.map((n) => el('li', {}, n))) : null].filter(Boolean));
+    } catch (e) { $('estOut').replaceChildren(el('p', { class: 'small' }, e.message)); }
+    busy(ev.target, false); aiStatus();
+  });
 
   // ---------- Borne de démo ----------
   let current;
@@ -313,10 +432,29 @@
   });
   $('kCancel').addEventListener('click', () => current && api('POST', `/v1/payments/${encodeURIComponent(current.reference)}/cancel`, { posId: current.posId }).catch((e) => notice(e.message)));
 
+  // ---------- Connexion ----------
+  function gate(on) {
+    $('signin').hidden = !on;
+    $('shell').inert = on;
+    $('shell').setAttribute('aria-hidden', String(on));
+    if (on) $('siKey').focus();
+  }
+  async function signIn(key) {
+    $('siErr').textContent = '';
+    const res = await fetch('/v1/pos', { headers: { authorization: `Bearer ${key}` } }).catch(() => null);
+    if (!res || !res.ok) { $('siErr').textContent = t('signin.bad'); return; }
+    store.set('apiKey', key); $('apiKey').value = key;
+    gate(false); notice('');
+    aiStatus(); await loadPos(); route();
+  }
+  $('siForm').addEventListener('submit', (ev) => { ev.preventDefault(); signIn($('siKey').value.trim()); });
+  $('signOut').addEventListener('click', () => { store.set('apiKey', ''); $('apiKey').value = ''; $('siKey').value = ''; posList = []; location.hash = '#overview'; gate(true); });
+
   // ---------- Clé, langue, navigation ----------
-  $('keyForm').addEventListener('submit', async (ev) => { ev.preventDefault(); store.set('apiKey', $('apiKey').value.trim()); notice(t('settings.saved')); await loadPos(); refresh(); });
+  $('keyForm').addEventListener('submit', async (ev) => { ev.preventDefault(); store.set('apiKey', $('apiKey').value.trim()); notice(t('settings.saved')); await loadPos(); refresh(); aiStatus(); });
   $('lang').addEventListener('change', async () => { lang = $('lang').value; store.set('lang', lang); await loadLang(); fillCountries($('catCountry')); fillCountries($('posCountry')); renderCatalog(); await loadPos(); refresh(); });
   $('catCountry').addEventListener('change', renderCatalog);
+  $('catRole').addEventListener('change', renderCatalog);
   const view = () => (location.hash || '#overview').slice(1);
   function refresh() {
     const v = view();
@@ -335,10 +473,15 @@
 
   (async () => {
     await loadLang();
-    [countries, modules] = await Promise.all([api('GET', '/v1/countries'), api('GET', '/v1/modules')]);
+    [countries, modules, offers] = await Promise.all([api('GET', '/v1/countries'), api('GET', '/v1/modules'), api('GET', '/v1/catalogue')]);
     fillCountries($('catCountry')); fillCountries($('posCountry'));
     renderCatalog();
     $('apiKey').value = store.get('apiKey') || '';
+    const cfg = await api('GET', '/v1/console/config').catch(() => ({}));
+    if (cfg.demoKey) { $('siDemo').hidden = false; $('siDemo').addEventListener('click', () => signIn(cfg.demoKey)); }
+    if (!store.get('apiKey')) return gate(true);
+    gate(false);
+    aiStatus();
     await loadPos();
     route();
   })();

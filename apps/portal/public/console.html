@@ -10,7 +10,22 @@
 </head>
 <body>
 <a class="skip" href="#main" data-i18n="skip">Aller au contenu</a>
-<div class="shell">
+<section id="signin" class="signin" hidden aria-labelledby="siH">
+  <div class="si-card">
+    <a class="brand" href="/"><svg width="24" height="24" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="12" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 4C8.5 9.5 8.5 22.5 16 28" fill="none" stroke="var(--mint)" stroke-width="2" stroke-linecap="round"/><path d="M16 4C23.5 9.5 23.5 22.5 16 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" opacity=".3"/></svg>Meridian</a>
+    <h1 id="siH" data-i18n="signin.title">Console Meridian</h1>
+    <p class="si-p" data-i18n="signin.p">Paiements et journal signé, catalogue des PSP, points de vente de toutes vos caisses.</p>
+    <form id="siForm">
+      <label><span data-i18n="settings.key">Clé Meridian (mk_test_…)</span><input id="siKey" autocomplete="off" spellcheck="false" required aria-describedby="siErr"></label>
+      <p id="siErr" class="si-err" role="alert"></p>
+      <button class="primary" data-i18n="signin.go">Se connecter</button>
+      <button type="button" id="siDemo" class="ghost" hidden data-i18n="signin.demo">Ouvrir la démo</button>
+    </form>
+    <p class="small" data-i18n="settings.note">La clé reste dans cet onglet du navigateur.</p>
+    <a class="small si-back" href="/" data-i18n="signin.back">Retour au site</a>
+  </div>
+</section>
+<div class="shell" id="shell">
 <aside class="side">
   <a class="brand" href="/"><svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="12" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 4C8.5 9.5 8.5 22.5 16 28" fill="none" stroke="var(--mint)" stroke-width="2" stroke-linecap="round"/><path d="M16 4C23.5 9.5 23.5 22.5 16 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" opacity=".3"/></svg>Meridian<span class="env" id="env" hidden></span></a>
   <nav aria-label="Console" class="snav">
@@ -52,7 +67,7 @@
       <button id="verifyBtn" data-i18n="payments.verify">Vérifier le journal</button><span id="verifyOut" class="mono small" role="status"></span></div>
     <div class="split">
       <div class="scroll" tabindex="0"><table class="tbl sel"><thead><tr><th data-i18n="field.reference">Référence</th><th data-i18n="field.time">Heure</th><th class="num" data-i18n="field.amount">Montant</th><th data-i18n="field.state">État</th><th data-i18n="field.module">PSP</th></tr></thead><tbody id="payRows"></tbody></table></div>
-      <aside id="journal" class="panel jpanel" hidden aria-live="polite"><div class="ph"><h2><span data-i18n="payments.journal">Journal signé</span> · <span id="jRef" class="mono"></span></h2><button id="jClose" class="ghost" data-i18n="action.close">Fermer</button></div><ol id="journalList" class="jl"></ol></aside>
+      <aside id="journal" class="panel jpanel" hidden aria-live="polite"><div class="ph"><h2><span data-i18n="payments.journal">Journal signé</span> · <span id="jRef" class="mono"></span></h2><div class="bar"><button id="jExplain" class="primary" data-i18n="j.explain">Expliquer</button><button id="jClose" class="ghost" data-i18n="action.close">Fermer</button></div></div><div id="jText" class="jtext" hidden></div><ol id="journalList" class="jl"></ol></aside>
     </div>
   </section>
 
@@ -100,8 +115,45 @@
 
   <section id="v-catalog" class="view" hidden>
     <header class="vh"><h1 data-i18n="catalog.title">Catalogue</h1>
-      <label class="inline"><span data-i18n="field.country">Pays</span><select id="catCountry"></select></label></header>
-    <div id="catList" class="cards"></div>
+      <div class="bar">
+        <label class="inline"><span data-i18n="cat2.need">Je cherche</span><select id="catRole">
+          <option value="" data-i18n="cat2.r.all">Tout</option>
+          <option value="bundle" data-i18n="cat2.r.bundle">Tout-en-un : terminal et contrat</option>
+          <option value="acceptance" data-i18n="cat2.r.acceptance">Un terminal, je garde ma banque</option>
+          <option value="acquiring" data-i18n="cat2.r.acquiring">Un contrat d'acquisition</option>
+        </select></label>
+        <label class="inline"><span data-i18n="field.country">Pays</span><select id="catCountry"></select></label>
+        <label class="inline"><span data-i18n="cat2.pos">Brancher sur</span><select id="catPos" class="posSel"></select></label>
+      </div></header>
+    <section class="panel est" aria-labelledby="estH">
+      <h2 id="estH" data-i18n="est.title">Estimer le coût chez chaque PSP</h2>
+      <p class="small" data-i18n="est.lead">Décrivez l'activité, déposez une facture actuelle ou saisissez les chiffres : le coût mensuel est calculé avec les prix publics du catalogue.</p>
+      <div class="est-grid">
+        <form id="estDescribe" class="est-box">
+          <label><span data-i18n="est.describe">Décrire l'activité</span><textarea id="estText" rows="3" maxlength="4000" data-i18n-ph="est.describePh"></textarea></label>
+          <button class="primary ai" data-i18n="est.run">Estimer</button>
+        </form>
+        <form id="estFile" class="est-box">
+          <label><span data-i18n="est.file">Analyser une facture actuelle (PDF, photo, CSV, texte)</span><input id="estDoc" type="file" accept="application/pdf,image/png,image/jpeg,image/webp,text/plain,text/csv,.csv,.txt,.pdf"></label>
+          <div class="bar"><button class="primary ai" data-i18n="est.fileRun">Analyser</button><button type="button" id="estSample" class="ghost" data-i18n="est.sample">Exemple fictif</button></div>
+          <p class="small" data-i18n="est.privacy">Le document n'est pas conservé ; IBAN, e-mails et numéros sont masqués avant l'analyse.</p>
+        </form>
+        <form id="estManual" class="est-box">
+          <div class="grid2">
+            <label><span data-i18n="est.volume">Volume carte par mois (€)</span><input id="estVol" type="number" min="100" step="100" value="20000" required></label>
+            <label><span data-i18n="est.ticket">Panier moyen (€)</span><input id="estTicket" type="number" min="1" step="0.5" value="25" required></label>
+            <label><span data-i18n="est.terms">Terminaux</span><input id="estTerms" type="number" min="1" max="500" value="1" required></label>
+            <label><span data-i18n="est.foreign">Cartes hors Europe (%)</span><input id="estForeign" type="number" min="0" max="100" value="5" required></label>
+          </div>
+          <button class="primary" data-i18n="est.calc">Calculer</button>
+        </form>
+      </div>
+      <p id="estAi" class="small" hidden></p>
+      <div id="estOut" aria-live="polite"></div>
+    </section>
+    <p class="lead" data-i18n="cat2.lead">Prix publics relevés sur le site de chaque PSP, avec la date. Le compte s'ouvre chez le PSP, qui garde le contrat, la vérification d'identité et les fonds.</p>
+    <p class="legend small"><span class="badge b-preview" data-i18n="cat.preview">Aperçu</span> <span data-i18n="cat.previewNote">Module écrit d’après la documentation publique du PSP, pas encore validé sur sa sandbox : mode test uniquement.</span></p>
+    <div id="catList" class="cards offers"></div>
   </section>
 
   <section id="v-kiosk" class="view" hidden>
@@ -120,7 +172,7 @@
     <header class="vh"><h1 data-i18n="settings.title">Clé API</h1></header>
     <form id="keyForm" class="panel narrow">
       <label><span data-i18n="settings.key">Clé Meridian (mk_test_…)</span><input id="apiKey" autocomplete="off" spellcheck="false"></label>
-      <button class="primary" data-i18n="action.save">Enregistrer</button>
+      <div class="bar"><button class="primary" data-i18n="action.save">Enregistrer</button><button type="button" id="signOut" class="ghost" data-i18n="action.signout">Se déconnecter</button></div>
       <p class="small" data-i18n="settings.note">La clé reste dans cet onglet du navigateur.</p>
     </form>
   </section>

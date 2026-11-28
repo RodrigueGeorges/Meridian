@@ -1,6 +1,6 @@
 # Meridian
 
-Connecteur de paiement universel pour caisses, bornes et kiosques. Un seul SDK côté caisse, un catalogue de solutions de paiement branchables, un moteur qui garantit **zéro double débit** (journal signé, idempotence par étape, reprise après crash, bascule). Européen dès le lancement : FR, BE, NL, DE, ES, IT (et AT, CH).
+Connecteur et catalogue de paiement pour caisses, bornes et kiosques. Le marchand compare les PSP sur leurs prix publics et leurs fonctions, garde sa banque ou choisit le tout-en-un, ouvre son compte chez le PSP et le branche en un clic. Un seul SDK côté caisse, un moteur qui garantit **zéro double débit** (journal signé, idempotence par étape, reprise après crash, bascule). Européen dès le lancement : FR, BE, NL, DE, ES, IT (et AT, CH).
 
 ## Démarrer en local (5 minutes)
 
@@ -45,17 +45,18 @@ STRIPE_KEY=sk_test_… COUNTRY=DE pnpm sandbox   # sandbox Stripe réelle, par p
 | Chemin | Rôle |
 | --- | --- |
 | `packages/core` | Pays, devises ISO 4217 (unités mineures), moyens de paiement locaux, types |
-| `packages/modules` | Interpréteur de modules JSON, schéma, catalogue (`catalog/*.json`) |
+| `packages/modules` | Interpréteur de modules JSON, schéma, connecteurs (`catalog/*.json`) et fiches du catalogue (`catalog/offers.json` : rôle acceptation / acquisition, prix publics sourcés et datés, terminaux, ouverture de compte ; servies par `GET /v1/catalogue`) |
 | `packages/engine` | Moteur (5 appels), journal chaîné SHA-256 + HMAC, reprise, bascule |
 | `packages/store-pg` | PostgreSQL : journal append-only, points de vente, secrets chiffrés AES-256-GCM, migrations |
 | `packages/bridges` | Passerelles caisse : Concert/Caisse-AP (TCP 8888 : débit, remboursement, annulation), ZVT (TCP 20007 : Registration, Authorization, Reversal, Refund, Abort, End-of-Day, Log-Off, Status Enquiry, Diagnosis), nexo Retailer JSON et XML (`POST /v1/nexo` : Login, Logout, Payment, Reversal, TransactionStatus, Abort, Reconciliation) |
 | `packages/terminals` | Pilotes de TPE côté caisse : Caisse-AP sur IP, ZVT, nexo ; service terminal idempotent écrit sur disque ; TPE simulés |
 | `apps/edge` | Agent du magasin : API locale identique à l'API cloud (127.0.0.1:8787) et relais cloud par connexion sortante (`/v1/edge/connect`) |
-| `packages/mcp` | Serveur MCP pour assistants de code : lecture du catalogue, des points de vente, de leur PSP et du journal ; paiement de test (clé `mk_test_` uniquement) ; ni annulation ni remboursement |
+| `packages/ai` | IA autour du paiement, jamais dans le paiement : Mistral AI par défaut sur son point d'accès européen, un modèle par usage (OCR et Medium pour lire les relevés, Small pour le conseiller et le support, Medium pour les brouillons de modules ; Anthropic en option), masquage des données avant envoi, sorties validées par schéma ; moteur de coût déterministe (`estimate`) |
+| `packages/mcp` | Serveur MCP pour assistants de code : lecture et comparaison du catalogue (`meridian_compare_offers`), des points de vente, de leur PSP et du journal ; paiement de test (clé `mk_test_` uniquement) ; ni annulation ni remboursement |
 | `packages/sdk-js` | SDK caisse : `pay`, `status`, `cancel`, `refund`, `receipt`, `waitForFinal` |
 | `apps/api` | API REST + worker intégré + portail statique |
 | `apps/sim` | Simulateurs PSP fidèles aux API, injection de pannes (`POST /__faults`) |
-| `apps/portal` | Site public : `build.ts` génère au démarrage 24 pages pré-rendues (4 pages × 6 langues, URL localisées, hreflang) et 22 pages FR/EN (`content/` : sécurité, développeurs, contact, protocoles, Stripe Terminal, statut des PSP, accessibilité, mentions légales, confidentialité), `/llms.txt` ; gabarit `public/index.html` ; console `/portal/console.html` (vue d'ensemble, paiements et journal, rapprochement avec export CSV, PSP de chaque caisse, catalogue, borne de démo) |
+| `apps/portal` | Site public : `build.ts` génère au démarrage 30 pages pré-rendues (5 pages × 6 langues : accueil, éditeurs, distributeurs, PSP, démo ; URL localisées, hreflang) et 22 pages FR/EN (`content/` : sécurité, développeurs, contact, protocoles, Stripe Terminal, statut des PSP, accessibilité, mentions légales, confidentialité), `/llms.txt` ; gabarit `public/index.html` ; console `/portal/console.html` (vue d'ensemble, paiements et journal, rapprochement avec export CSV, PSP de chaque caisse, catalogue comparatif avec prix, filtre acceptation / acquisition, « Brancher » et « Ouvrir un compte », borne de démo) |
 | `conformance` | 8 scénarios de la spec + test de propriétés |
 | `tools/sandbox-check` | Test contre la sandbox Stripe réelle, par pays |
 | `infra`, `.github/workflows` | Docker, Fly.io (Paris), CI, sandbox nocturne, déploiement |
@@ -93,6 +94,19 @@ Testé par `apps/api/src/cluster.test.ts` (deux API, une base, arrêt d'une inst
 Écrire `packages/modules/catalog/<psp>.json` (voir `stripe-terminal.json`), l'ajouter à `BUILTIN_MODULES`, faire passer `conformance/` contre son simulateur puis sa sandbox. Aucun code dans le moteur. Un module sans `idempotency` ni `lookup` est refusé. Sans clé d'idempotence, le moteur appelle `lookup` avant tout renvoi d'une étape incertaine (`notFound` décrit la réponse « inconnu »).
 
 Un module nouveau porte `"maturity": "preview"` tant qu'il n'a pas passé les scénarios contre la sandbox réelle du PSP : il reste utilisable en mode test seulement et n'apparaît pas sur la page de statut publique. C'est le cas d'`adyen-terminal` (API Terminal, format nexo) et de `stripe-tap-to-pay` (encaissement sur l'appareil, secret client remis à la caisse dans `device`, jeton SDK par `POST /v1/pos/{id}/device-token`).
+
+## IA autour du paiement
+
+L'IA lit et explique ; le calcul et le paiement restent faits par le code. Fournisseur par défaut : Mistral AI, point d'accès européen `api.eu.mistral.ai` ; clé `MISTRAL_API_KEY` (Anthropic en option : `AI_PROVIDER=anthropic`, `ANTHROPIC_API_KEY`). Sans clé, les routes d'IA répondent 503 et l'explication d'un paiement rend les faits du journal).
+
+| Usage | Route ou outil | Modèle par défaut (variable) |
+|---|---|---|
+| Lire un relevé de commissions et comparer | `POST /v1/ai/statement` | Mistral OCR (`AI_MODEL_OCR`) puis Mistral Medium (`AI_MODEL_STATEMENT`) |
+| Conseiller en langage naturel | `POST /v1/ai/advisor` | Mistral Small (`AI_MODEL_ADVISOR`) |
+| Expliquer un paiement (journal signé) | `POST /v1/ai/explain` | Mistral Small (`AI_MODEL_SUPPORT`) |
+| Brouillon de module PSP depuis sa doc | `pnpm module:draft --id … --name … --doc …` | Mistral Medium (`AI_MODEL_MODULEGEN`) |
+
+Le coût par offre (`POST /v1/catalogue/estimate`, public) est un calcul déterministe sur les prix publics du catalogue. Les documents ne sont ni conservés ni journalisés ; IBAN, e-mails, téléphones et numéros longs sont masqués avant l'envoi au modèle. Un brouillon de module sort toujours en « preview » et passe la relecture et les 8 scénarios de panne avant publication.
 
 ## Tous les branchements
 

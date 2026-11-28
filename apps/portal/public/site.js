@@ -56,6 +56,13 @@
       const k = el.getAttribute('data-i18n-aria');
       if (dict[k] !== undefined) el.setAttribute('aria-label', dict[k]);
     }
+    // Prix publics du catalogue, au format de la langue (taux en %, frais fixes en euros).
+    for (const el of document.querySelectorAll('.pr[data-rate], .pr[data-fixed]')) {
+      const parts = [];
+      if (el.dataset.rate) parts.push(new Intl.NumberFormat(lang, { style: 'percent', maximumFractionDigits: 2 }).format(Number(el.dataset.rate) / 100));
+      if (el.dataset.fixed) parts.push(new Intl.NumberFormat(lang, { style: 'currency', currency: 'EUR' }).format(Number(el.dataset.fixed)));
+      el.textContent = parts.join(' + ');
+    }
     // Pages légales : français pour FR, anglais pour les autres langues.
     const legal = lang === 'fr' ? { notice: 'mentions-legales.html', privacy: 'confidentialite.html' } : { notice: 'legal-notice.html', privacy: 'privacy.html' };
     if (!STATIC) for (const a of document.querySelectorAll('[data-legal]')) a.setAttribute('href', legal[a.getAttribute('data-legal')]);
@@ -293,6 +300,37 @@
   let calcUpdate = () => undefined;
 
   // ---------- Démo ----------
+  // Démo IA : l'exemple fictif de relevé, lu par Mistral AI quand le serveur a une clé ; sinon chiffres enregistrés, présentés comme tels.
+  const aiRun = document.getElementById('aiRun');
+  if (aiRun) aiRun.addEventListener('click', async () => {
+    const eur = (n) => new Intl.NumberFormat(lang, { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n);
+    const mode = document.getElementById('aiMode'), list = document.getElementById('aiOffers');
+    aiRun.disabled = true; mode.textContent = t('v14.ai.reading'); list.replaceChildren();
+    let d = null;
+    try {
+      const r = await fetch('/v1/demo/statement', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"country":"FR"}', signal: AbortSignal.timeout(60000) });
+      if (r.status === 429) { mode.textContent = t('demo.rate'); aiRun.disabled = false; return; }
+      if (r.ok) d = await r.json();
+    } catch { /* aperçu statique : résultat enregistré */ }
+    d ??= await fetch(page.recordedStatement ?? 'demo-statement-recorded.json').then((r) => r.json()).catch(() => null);
+    aiRun.disabled = false;
+    if (!d) { mode.textContent = t('v14.ai.err'); return; }
+    mode.textContent = d.method === 'ai' ? t('v14.ai.mode.ai', { model: d.model }) : t('v14.ai.mode.manual');
+    const days = d.facts.periodDays || 30, k = 30 / days;
+    document.getElementById('aiVol').textContent = eur(d.facts.cardVolume * k);
+    document.getElementById('aiTx').textContent = new Intl.NumberFormat(lang).format(Math.round(d.facts.transactions * k));
+    document.getElementById('aiCur').textContent = eur(d.result.current);
+    document.getElementById('aiFacts').hidden = false;
+    for (const e of d.result.estimates.slice(0, 4)) {
+      const li = document.createElement('li');
+      const a = document.createElement('span'); a.className = 'nm'; a.textContent = e.name;
+      const b = document.createElement('span'); b.textContent = e.monthly == null ? t('v14.ai.quote') : t('v14.ai.month', { v: eur(e.monthly) });
+      const c = document.createElement('span'); c.className = 'sv' + (e.savings == null || e.savings <= 0 ? ' neg' : '');
+      c.textContent = e.savings == null ? '' : e.savings > 0 ? t('v14.ai.save', { v: eur(e.savings) }) : t('v14.ai.more', { v: eur(-e.savings) });
+      li.append(a, b, c); list.append(li);
+    }
+  });
+
   let recorded = null;
   let live = null; // null = inconnu, true = API joignable, false = exécution enregistrée
   let lastRun = null;

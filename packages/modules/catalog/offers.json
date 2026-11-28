@@ -1,0 +1,336 @@
+{
+  "$comment": "Fiches du catalogue : ce que le marchand compare avant de choisir. Prix publics relevés sur le site de chaque PSP (source et date indiquées) ; « icpp » et « grid » renvoient à la grille du PSP, « quote » = sur devis. Aucun partenariat n'est implicite.",
+  "offers": [
+    {
+      "id": "stripe-terminal",
+      "name": "Stripe Terminal",
+      "module": "stripe-terminal",
+      "roles": [
+        "acceptance",
+        "acquiring"
+      ],
+      "countries": [
+        "FR",
+        "BE",
+        "NL",
+        "DE",
+        "ES",
+        "IT",
+        "AT"
+      ],
+      "features": [
+        "cloud_api",
+        "tap_to_pay",
+        "partial_refunds",
+        "next_day"
+      ],
+      "terminals": [
+        {
+          "name": "BBPOS WisePad 3",
+          "price": 59
+        },
+        {
+          "name": "Stripe S700",
+          "price": 259
+        },
+        {
+          "name": "Stripe T600",
+          "price": 289
+        }
+      ],
+      "pricing": {
+        "model": "blended",
+        "lines": [
+          {
+            "key": "card_eea",
+            "rate": 1.4,
+            "fixed": 0.1,
+            "segment": "eea"
+          },
+          {
+            "key": "card_other",
+            "rate": 2.9,
+            "fixed": 0.1,
+            "segment": "other"
+          }
+        ],
+        "source": "https://www.stripe.com/fr/pricing/",
+        "checkedAt": "2026-11-28"
+      },
+      "account": "https://www.stripe.com/fr/pricing/"
+    },
+    {
+      "id": "sumup-solo",
+      "name": "SumUp",
+      "module": "sumup-solo",
+      "roles": [
+        "acceptance",
+        "acquiring"
+      ],
+      "countries": [
+        "FR",
+        "BE",
+        "NL",
+        "DE",
+        "ES",
+        "IT",
+        "AT",
+        "CH"
+      ],
+      "features": [
+        "cloud_api",
+        "tap_to_pay",
+        "no_commitment",
+        "next_day"
+      ],
+      "terminals": [
+        {
+          "name": "Solo"
+        }
+      ],
+      "pricing": {
+        "model": "blended",
+        "country": "FR",
+        "lines": [
+          {
+            "key": "payg",
+            "rate": 1.75,
+            "segment": "all",
+            "plan": "payg"
+          },
+          {
+            "key": "plan",
+            "rate": 0.89,
+            "monthly": 19,
+            "segment": "all",
+            "plan": "plus"
+          }
+        ],
+        "source": "https://www.sumup.com/fr-fr/tarifs/",
+        "checkedAt": "2026-11-28"
+      },
+      "account": "https://www.sumup.com/fr-fr/tarifs/"
+    },
+    {
+      "id": "mollie-pos",
+      "name": "Mollie",
+      "module": "mollie-pos",
+      "roles": [
+        "acceptance",
+        "acquiring"
+      ],
+      "countries": [
+        "NL",
+        "BE",
+        "DE",
+        "FR"
+      ],
+      "features": [
+        "cloud_api",
+        "tap_to_pay",
+        "no_commitment",
+        "online_too"
+      ],
+      "terminals": [
+        {
+          "name": "Mobile POS Terminal",
+          "price": 350
+        },
+        {
+          "name": "Fixed POS Terminal",
+          "price": 350
+        }
+      ],
+      "pricing": {
+        "model": "blended",
+        "lines": [
+          {
+            "key": "card_consumer",
+            "rate": 1.8,
+            "fixed": 0.1,
+            "segment": "consumer"
+          },
+          {
+            "key": "card_business",
+            "rate": 2.9,
+            "fixed": 0.1,
+            "segment": "business"
+          },
+          {
+            "key": "per_terminal",
+            "monthly": 20,
+            "perTerminal": true
+          }
+        ],
+        "source": "https://www.mollie.nl/products/pos-payments/omnichannel-payment-solutions",
+        "checkedAt": "2026-11-28"
+      },
+      "account": "https://www.mollie.com/pricing"
+    },
+    {
+      "id": "square-terminal",
+      "name": "Square",
+      "module": "square-terminal",
+      "roles": [
+        "acceptance",
+        "acquiring"
+      ],
+      "countries": [
+        "FR",
+        "ES"
+      ],
+      "features": [
+        "cloud_api",
+        "no_commitment",
+        "next_day"
+      ],
+      "terminals": [
+        {
+          "name": "Square Terminal"
+        }
+      ],
+      "pricing": {
+        "model": "blended",
+        "country": "FR",
+        "lines": [
+          {
+            "key": "card_inperson",
+            "rate": 1.65,
+            "segment": "all"
+          }
+        ],
+        "note": "varies",
+        "source": "https://squareup.com/fr/fr/point-of-sale/retail/pricing",
+        "checkedAt": "2026-11-28"
+      },
+      "account": "https://squareup.com/fr/fr/payments/our-fees"
+    },
+    {
+      "id": "adyen-terminal",
+      "name": "Adyen",
+      "module": "adyen-terminal",
+      "roles": [
+        "acceptance",
+        "acquiring"
+      ],
+      "countries": [
+        "FR",
+        "BE",
+        "NL",
+        "DE",
+        "ES",
+        "IT",
+        "AT",
+        "CH"
+      ],
+      "features": [
+        "cloud_api",
+        "local_api",
+        "tap_to_pay",
+        "online_too"
+      ],
+      "terminals": [],
+      "pricing": {
+        "model": "icpp",
+        "source": "https://www.adyen.com/pricing",
+        "checkedAt": "2026-11-28"
+      },
+      "account": "https://www.adyen.com/pricing"
+    },
+    {
+      "id": "viva",
+      "name": "Viva",
+      "module": null,
+      "roles": [
+        "acceptance",
+        "acquiring"
+      ],
+      "countries": [
+        "FR",
+        "BE",
+        "NL",
+        "DE",
+        "ES",
+        "IT",
+        "AT"
+      ],
+      "features": [
+        "cloud_api",
+        "tap_to_pay",
+        "offline"
+      ],
+      "terminals": [],
+      "pricing": {
+        "model": "grid",
+        "source": "https://www.viva.com/fr-fr/pricing",
+        "checkedAt": "2026-11-28"
+      },
+      "account": "https://www.viva.com/fr-fr/pricing"
+    },
+    {
+      "id": "store-terminal",
+      "name": "TPE du magasin",
+      "module": "edge-terminal",
+      "roles": [
+        "acceptance"
+      ],
+      "countries": [
+        "FR",
+        "BE",
+        "NL",
+        "DE",
+        "ES",
+        "IT",
+        "AT",
+        "CH"
+      ],
+      "features": [
+        "local_api",
+        "cloud_relay",
+        "offline",
+        "keep_bank"
+      ],
+      "terminals": [
+        {
+          "name": "Caisse-AP (IP)"
+        },
+        {
+          "name": "ZVT"
+        },
+        {
+          "name": "nexo"
+        }
+      ],
+      "pricing": {
+        "model": "none"
+      },
+      "account": null
+    },
+    {
+      "id": "bank-acquiring",
+      "name": "Contrat carte de votre banque",
+      "module": null,
+      "roles": [
+        "acquiring"
+      ],
+      "countries": [
+        "FR",
+        "BE",
+        "NL",
+        "DE",
+        "ES",
+        "IT",
+        "AT",
+        "CH"
+      ],
+      "features": [
+        "keep_bank"
+      ],
+      "terminals": [],
+      "pricing": {
+        "model": "quote"
+      },
+      "account": null
+    }
+  ]
+}

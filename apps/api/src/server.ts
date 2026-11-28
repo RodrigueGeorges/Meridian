@@ -2,6 +2,7 @@
 // (worker intégré) et reprend les paiements inachevés au démarrage.
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { runTerminalDemo, TERMINAL_DEMO_INCIDENTS } from '@meridian/terminals';
+import { AiFailed, AiUnavailable, Current, documentText, estimate, statementDemoManual, explainPayment, fromStatement, llmFromEnv, Profile, profileFromText, readStatement, UnreadableDocument, type Llm } from '@meridian/ai';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,7 +17,7 @@ import fastifyWebsocket from '@fastify/websocket';
 import { z, ZodError } from 'zod';
 import { COUNTRIES, isCurrency, MeridianError, type Currency } from '@meridian/core';
 import { Engine, Journal, JsonlStore, MemoryStore, type JournalStore, type PaymentView } from '@meridian/engine';
-import { BUILTIN_MODULES, ModuleRuntime } from '@meridian/modules';
+import { BUILTIN_MODULES, ModuleRuntime, OFFERS } from '@meridian/modules';
 import { createConcertServer, createZvtServer, engineTarget, handleNexo, nexoFromXml, nexoToXml } from '@meridian/bridges';
 import type { Server as NetServer } from 'node:net';
 import { MemoryPosRepo, PgCluster, PgJournalStore, PgPosRepo, SecretBox, migrate, pg, type PosRepo } from '@meridian/store-pg';
@@ -33,6 +34,8 @@ export interface ServerOptions {
   demoSeed?: { stripeUrl: string; secoursUrl: string };
   engine?: { pollMs?: number; retryMs?: number; payTimeoutMs?: number; scanMs?: number; httpTimeoutMs?: number };
   logger?: boolean;
+  /** Modèles de langage (lecture de relevés, conseiller, support). Défaut : variables d'environnement (MISTRAL_API_KEY ou AI_PROVIDER=anthropic + ANTHROPIC_API_KEY, AI_MODEL_*). */
+  ai?: Llm;
   /** Derrière un proxy (Fly) : lire l'IP client dans X-Forwarded-For. Ne jamais activer sans proxy de confiance. */
   trustProxy?: boolean;
   /** URL publique du site, pour robots.txt et sitemap.xml (ex. https://meridian.example). */
@@ -206,6 +209,9 @@ export async function buildServer(o: ServerOptions) {
   // ---------- Erreurs ----------
   app.setErrorHandler((err: Error, _req, reply) => {
     if (err instanceof MeridianError) return reply.code(err.status).send({ error: { code: err.code, message: err.message } });
+    if (err instanceof AiUnavailable) return reply.code(503).send({ error: { code: err.code, message: 'Fonction d’IA non configurée sur ce serveur' } });
+    if (err instanceof UnreadableDocument) return reply.code(422).send({ error: { code: err.code, message: err.message } });
+    if (err instanceof AiFailed) { app.log.warn({ ai: err.message }); return reply.code(502).send({ error: { code: err.code, message: 'Le document n’a pas pu être lu de façon fiable ; vérifiez qu’il s’agit d’un relevé de commissions' } }); }
     if (err instanceof ZodError) return reply.code(400).send({ error: { code: 'invalid_request', message: err.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ') } });
     const status = (err as { statusCode?: number }).statusCode ?? 500;
     if (status >= 500) app.log.error(err);
@@ -324,6 +330,68 @@ export async function buildServer(o: ServerOptions) {
     return runTerminalDemo({ mode, incident });
   });
 
+  // ---------- IA autour du paiement (jamais dans le paiement) ----------
+  // Le modèle lit et explique ; le code calcule. Aucun document n'est conservé ni journalisé.
+  const llm = o.ai ?? llmFromEnv(process.env, { onUsage: (u) => app.log.info({ ai: u }) });
+  const aiQuota = async (org: Org) => {
+    if (!(await allow('ai', org.id, 30, 60_000))) throw new MeridianError('rate_limited', 'Trop de demandes d’IA, réessayez dans une minute', 429);
+  };
+  app.post('/v1/catalogue/estimate', async (req, reply) => {
+    if (!(await allow('estimate', req.ip, 60, 60_000))) return reply.code(429).send({ error: { code: 'rate_limited', message: 'Trop de demandes, réessayez dans une minute' } });
+    const b = z.object({ profile: Profile, current: Current.optional() }).parse(req.body);
+    return estimate(OFFERS, b.profile, b.current);
+  });
+  // Démo publique : l'exemple fictif de relevé, lu par le modèle si l'IA est configurée ; sinon, ses chiffres saisis sans IA.
+  const SAMPLE = readFileSync(new URL('../../portal/public/exemples/releve-fictif.txt', import.meta.url), 'utf8');
+  app.post('/v1/demo/statement', async (req, reply) => {
+    if (!(await allow('demo', req.ip, 12, 60_000))) return reply.code(429).send({ error: { code: 'rate_limited', message: 'Trop de démos, réessayez dans une minute' } });
+    const country = z.object({ country: z.string().length(2).default('FR') }).parse(req.body ?? {}).country.toUpperCase();
+    if (llm.enabled) {
+      try {
+        const facts = await readStatement(llm, SAMPLE);
+        const { profile, current } = fromStatement(facts, country);
+        return { method: 'ai', provider: llm.provider, model: llm.models.statement, facts, profile, result: estimate(OFFERS, profile, current) };
+      } catch (e) { app.log.warn({ ai: (e as Error).message }); }
+    }
+    return { method: 'manual', ...statementDemoManual(country) };
+  });
+  app.get('/v1/ai/status', async (req) => {
+    await auth(req);
+    return { enabled: llm.enabled, provider: llm.provider, models: llm.models, ocr: llm.ocrModel ?? null };
+  });
+  app.post('/v1/ai/statement', { bodyLimit: 12 * 1024 * 1024 }, async (req) => {
+    const org = await auth(req);
+    await aiQuota(org);
+    const b = z.object({
+      country: z.string().length(2),
+      file: z.object({ type: z.string().max(100), base64: z.string().max(11_000_000) }).optional(),
+      text: z.string().min(20).max(200_000).optional(),
+    }).refine((x) => x.file || x.text, 'file ou text obligatoire').parse(req.body);
+    const text = await documentText(b.file ? { type: b.file.type, data: new Uint8Array(Buffer.from(b.file.base64, 'base64')) } : { text: b.text! }, llm);
+    const facts = await readStatement(llm, text);
+    const { profile, current } = fromStatement(facts, b.country.toUpperCase());
+    return { facts, profile, current, result: estimate(OFFERS, profile, current), model: llm.models.statement, ocr: b.file && llm.ocr ? llm.ocrModel : null };
+  });
+  app.post('/v1/ai/advisor', async (req) => {
+    const org = await auth(req);
+    await aiQuota(org);
+    const b = z.object({ country: z.string().length(2), text: z.string().min(5).max(4000) }).parse(req.body);
+    const r = await profileFromText(llm, b.text, b.country.toUpperCase());
+    return { ...r, result: r.profile ? estimate(OFFERS, r.profile) : null, model: llm.models.advisor };
+  });
+  app.post('/v1/ai/explain', async (req) => {
+    const org = await auth(req);
+    const b = z.object({ posId: z.string(), reference: z.string(), lang: z.enum(['fr', 'en', 'de', 'es', 'it', 'nl']).default('fr') }).parse(req.body);
+    await ownPos(org, b.posId);
+    const view = await engine.statusFresh(b.posId, b.reference);
+    const journal = (await store.byReference(b.posId, b.reference)) as { seq: number; ts: string; type: string; data: Record<string, unknown> }[];
+    const facts = { reference: view.reference, state: view.state, detail: view.detail ?? null, amount: view.amount, currency: view.currency, module: view.module, refunded: view.refunded };
+    if (llm.enabled && (await allow('ai', org.id, 30, 60_000))) {
+      try { return { ...(await explainPayment(llm, facts, journal, b.lang)), model: llm.models.support }; } catch (e) { app.log.warn({ ai: (e as Error).message }); }
+    }
+    return explainPayment(undefined, facts, journal, b.lang);
+  });
+
   // ---------- Contact (site public) ----------
   const contacts: unknown[] = [];
   app.post('/v1/contact', async (req, reply) => {
@@ -355,6 +423,21 @@ export async function buildServer(o: ServerOptions) {
     config: m.config.map((c) => ({ key: c.key, type: c.type, secret: c.secret, label: c.label })),
   })));
   app.get('/v1/countries', async () => COUNTRIES);
+  // Catalogue public : la fiche de chaque offre (rôle, prix publics sourcés, terminaux, ouverture de compte)
+  // et l'état réel de son connecteur Meridian.
+  app.get('/v1/catalogue', async (_req, reply) => {
+    reply.header('cache-control', 'public, max-age=300').header('access-control-allow-origin', '*');
+    return OFFERS.map((o) => {
+      const m = o.module ? BUILTIN_MODULES[o.module] : undefined;
+      const status = o.id === 'bank-acquiring' ? 'external' : !m ? 'planned' : m.maturity === 'preview' ? 'preview' : 'available';
+      return { ...o, status };
+    });
+  });
+  // Console : en démonstration seulement (données de démo et clé de test), la clé de démo est proposée à l'écran de connexion.
+  app.get('/v1/console/config', async () => ({
+    demoKey: o.demoSeed && o.bootstrapKey?.startsWith('mk_test_') ? o.bootstrapKey : null,
+  }));
+
   app.get('/v1/status', async (_req, reply) => {
     reply.header('cache-control', 'public, max-age=30').header('access-control-allow-origin', '*');
     return { generatedAt: new Date().toISOString(), minSample: MIN_SAMPLE, modules: await status.snapshot(publicModules()) };
@@ -590,7 +673,7 @@ export async function buildServer(o: ServerOptions) {
   // Console (page d'administration) : servie telle quelle, non indexée.
   await app.register(fastifyStatic, {
     root: portalDir, prefix: '/portal/', cacheControl: false, index: false,
-    allowedPath: (path) => /^\/(console\.html|app\.js|styles\.css|fonts\.css|fonts\/.+|i18n\/(?!site\/).+)$/.test(path),
+    allowedPath: (path) => /^\/(console\.html|app\.js|styles\.css|fonts\.css|fonts\/.+|logos\/[a-z]+\.svg|exemples\/[a-z-]+\.txt|i18n\/(?!site\/).+)$/.test(path),
     setHeaders: (res, path) => {
       if (path.endsWith('.html')) { res.header('Cache-Control', 'no-cache'); res.header('X-Robots-Tag', 'noindex'); }
       else if (path.includes('/fonts/')) res.header('Cache-Control', 'public, max-age=31536000, immutable');

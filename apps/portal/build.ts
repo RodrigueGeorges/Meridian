@@ -47,6 +47,8 @@ export function buildSite(): Site {
   };
 
   // ---------- Fichiers statiques ----------
+  const logos: Record<string, string> = {};
+  for (const f of readdirSync(join(pub, 'logos'))) logos[`logos/${f}`] = asset(`logos/${f}`, readFileSync(join(pub, 'logos', f), 'utf8'), 'image/svg+xml');
   for (const f of readdirSync(join(pub, 'fonts'))) {
     files.set(`/assets/fonts/${f}`, { body: readFileSync(join(pub, 'fonts', f)), type: 'font/woff2', cache: IMMUTABLE });
   }
@@ -55,6 +57,9 @@ export function buildSite(): Site {
   const js = asset('site.js', readFileSync(join(pub, 'site.js'), 'utf8'), 'text/javascript; charset=utf-8');
   const recorded = asset('demo-recorded.json', readFileSync(join(pub, 'demo-recorded.json'), 'utf8'), 'application/json; charset=utf-8');
   const recordedTerminal = asset('demo-terminal-recorded.json', readFileSync(join(pub, 'demo-terminal-recorded.json'), 'utf8'), 'application/json; charset=utf-8');
+  const recordedStatement = asset('demo-statement-recorded.json', readFileSync(join(pub, 'demo-statement-recorded.json'), 'utf8'), 'application/json; charset=utf-8');
+  const samples: Record<string, string> = {};
+  for (const f of readdirSync(join(pub, 'exemples'))) samples[`exemples/${f}`] = asset(`exemples/${f}`, readFileSync(join(pub, 'exemples', f), 'utf8'), 'text/plain; charset=utf-8');
   files.set('/apple-touch-icon.png', { body: readFileSync(join(pub, 'apple-touch-icon.png')), type: 'image/png', cache: 'public, max-age=86400' });
   const og: Record<string, string> = {};
   for (const l of LANGS) og[l] = asset(`og-${l}.png`, readFileSync(join(pub, `og-${l}.png`)), 'image/png');
@@ -90,6 +95,7 @@ export function buildSite(): Site {
     h.setAttribute('data-dict', dictUrl[l]!);
     h.setAttribute('data-recorded', recorded);
     h.setAttribute('data-recorded-terminal', recordedTerminal);
+    h.setAttribute('data-recorded-statement', recordedStatement);
     // i18n
     for (const el of document.querySelectorAll('[data-i18n]')) { const v = d[el.getAttribute('data-i18n')!]; if (v !== undefined) el.textContent = v; }
     for (const el of document.querySelectorAll('[data-i18n-html]')) { const v = d[el.getAttribute('data-i18n-html')!]; if (v !== undefined) el.innerHTML = v; }
@@ -102,7 +108,9 @@ export function buildSite(): Site {
       if ((MAIN as readonly string[]).includes(id)) a.setAttribute('href', mainUrl(l, id as MainId));
     }
     for (const a of document.querySelectorAll('a[href*="github.com"]')) a.setAttribute('href', url(l, 'developers'));
+    for (const img of document.querySelectorAll('img[src^="logos/"]')) img.setAttribute('src', logos[img.getAttribute('src')!]!);
     for (const a of document.querySelectorAll('a[href="console.html"]')) a.setAttribute('href', '/portal/console.html');
+    for (const a of document.querySelectorAll('a[href^="exemples/"]')) a.setAttribute('href', samples[a.getAttribute('href')!]!);
     for (const a of document.querySelectorAll('.nav a')) {
       if (a.getAttribute('href') === alternates[l]) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
     }

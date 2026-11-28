@@ -16,6 +16,7 @@ COPY apps/sim/package.json apps/sim/
 COPY apps/portal/package.json apps/portal/
 COPY packages/mcp/package.json packages/mcp/
 COPY packages/terminals/package.json packages/terminals/
+COPY packages/ai/package.json packages/ai/
 COPY apps/edge/package.json apps/edge/
 RUN pnpm install --frozen-lockfile --prod=false
 
