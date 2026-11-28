@@ -10,11 +10,28 @@ fly auth login            # une fois (flyctl : https://fly.io/docs/flyctl/instal
 ./tools/go-live.sh        # app + PostgreSQL géré + secrets + déploiement + test de fumée
 ```
 
-Le script est idempotent, provisionne un Managed Postgres `Basic` à Paris (sauvegardes incluses),
+Le script est idempotent, provisionne un Managed Postgres `Basic` en UE (sauvegardes incluses),
 génère `JOURNAL_KEY`, `MASTER_KEY`, `BOOTSTRAP_API_KEY` (`mk_live_` aléatoire) dans `.secrets-prod.txt`
-(chmod 600 — à ranger dans un coffre puis supprimer) et finit par `fly scale count 2`.
+(chmod 600 — à ranger dans un coffre puis supprimer) et finit par `fly scale count 1`.
 Variables : `APP`, `REGION`, `DB_NAME`, `DB_PLAN`, `SCALE`, `PUBLIC_URL`, `DATABASE_URL` (base externe,
 connexion directe uniquement), `SKIP_DB=1`.
+
+## État du déploiement actuel (2026-11-28)
+
+- App `meridian-2ejyig` : 1 machine `shared-cpu-1x` 512 Mo à Paris (cdg), image prod-deps.
+- Base : Managed Postgres `meridian-2ejyig-db` (fra — MPG indisponible à cdg), plan Basic,
+  connexion **directe** (`direct.….flympg.net`, jamais pgbouncer).
+- Secrets posés : `DATABASE_URL`, `JOURNAL_KEY`, `MASTER_KEY`, `BOOTSTRAP_API_KEY` (`mk_live_`),
+  `METRICS_TOKEN`, `PUBLIC_URL`. Copie locale dans `.secrets-prod.txt` (gitignoré).
+- **Mode privé** : aucune IP publique (v4/v6 relâchées). L'app n'est joignable que par le réseau
+  privé Fly : `flyctl proxy 8080:8080 -a meridian-2ejyig` → http://localhost:8080,
+  ou `flyctl ssh console -a meridian-2ejyig` pour les vérifs. WireGuard par WebSocket activé
+  (`flyctl wireguard websockets enable`) car UDP bloqué sur ce poste.
+- **Réouverture publique** (site + API) :
+  `flyctl ips allocate-v4 --shared -a meridian-2ejyig && flyctl ips allocate-v6 -a meridian-2ejyig`
+- **Paiement requis** : l'organisation est en essai sans CB — les machines « trial » s'arrêtent
+  après quelques minutes d'inactivité (`fly.io/trial` → ajouter un moyen de paiement, requis aussi
+  pour la facturation MPG).
 
 ## Déjà fait (code)
 
