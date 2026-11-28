@@ -32,7 +32,7 @@ export interface AgentOptions {
 export function driverFromEnv(env: NodeJS.ProcessEnv = process.env): TerminalDriver {
   const kind = env.TERMINAL ?? 'caisse-ap';
   if (kind === 'zvt') return new ZvtDriver({ host: env.TERMINAL_HOST ?? '127.0.0.1', port: Number(env.TERMINAL_PORT ?? 20007) });
-  if (kind === 'nexo') return new NexoDriver({ url: env.TERMINAL_URL ?? 'http://127.0.0.1:8080/', poiId: env.TERMINAL_POIID ?? 'POI1', saleId: env.MERIDIAN_AGENT_ID });
+  if (kind === 'nexo') return new NexoDriver({ url: env.TERMINAL_URL ?? 'http://127.0.0.1:8080/', poiId: env.TERMINAL_POIID ?? 'POI1', saleId: env.MERIDIAN_AGENT_ID, session: env.TERMINAL_SESSION === '1' });
   return new CaisseApDriver({ host: env.TERMINAL_HOST ?? '127.0.0.1', port: Number(env.TERMINAL_PORT ?? 8888), caisse: env.TERMINAL_CAISSE ?? '01' });
 }
 

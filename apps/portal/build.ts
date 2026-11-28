@@ -10,16 +10,17 @@ import { parseHTML } from 'linkedom';
 
 export const LANGS = ['fr', 'en', 'de', 'es', 'it', 'nl'] as const;
 export type Lang = (typeof LANGS)[number];
-const MAIN = ['home', 'software', 'psp', 'demo'] as const;
+const MAIN = ['home', 'software', 'resellers', 'psp', 'demo'] as const;
 type MainId = (typeof MAIN)[number];
 const SLUG: Record<Exclude<MainId, 'home'>, Record<Lang, string>> = {
   software: { fr: 'editeurs', en: 'pos-software', de: 'kassensoftware', es: 'software-tpv', it: 'software-cassa', nl: 'kassasoftware' },
+  resellers: { fr: 'distributeurs', en: 'resellers', de: 'haendler', es: 'distribuidores', it: 'distributori', nl: 'resellers' },
   psp: { fr: 'psp', en: 'psp', de: 'psp', es: 'psp', it: 'psp', nl: 'psp' },
   demo: { fr: 'demo', en: 'demo', de: 'demo', es: 'demo', it: 'demo', nl: 'demo' },
 };
 const OG_LOCALE: Record<Lang, string> = { fr: 'fr_FR', en: 'en_GB', de: 'de_DE', es: 'es_ES', it: 'it_IT', nl: 'nl_NL' };
 const TITLE_KEY: Record<Exclude<MainId, 'home'>, [string, string]> = {
-  software: ['sw.title', 'sw.lede'], psp: ['psp.title', 'psp.lede'], demo: ['demo.title', 'demo.lede'],
+  software: ['sw.title', 'sw.lede'], resellers: ['v11.res.title', 'v11.res.lede'], psp: ['v11.psp.title', 'psp.lede'], demo: ['v11.demo.title', 'v11.demo.lede'],
 };
 
 interface SecPage { id: string; slug: { fr: string; en: string }; title: { fr: string; en: string }; desc: { fr: string; en: string }; todo?: boolean }
@@ -53,6 +54,7 @@ export function buildSite(): Site {
   const fonts = asset('fonts.css', readFileSync(join(pub, 'fonts.css'), 'utf8'), 'text/css; charset=utf-8');
   const js = asset('site.js', readFileSync(join(pub, 'site.js'), 'utf8'), 'text/javascript; charset=utf-8');
   const recorded = asset('demo-recorded.json', readFileSync(join(pub, 'demo-recorded.json'), 'utf8'), 'application/json; charset=utf-8');
+  const recordedTerminal = asset('demo-terminal-recorded.json', readFileSync(join(pub, 'demo-terminal-recorded.json'), 'utf8'), 'application/json; charset=utf-8');
   files.set('/apple-touch-icon.png', { body: readFileSync(join(pub, 'apple-touch-icon.png')), type: 'image/png', cache: 'public, max-age=86400' });
   const og: Record<string, string> = {};
   for (const l of LANGS) og[l] = asset(`og-${l}.png`, readFileSync(join(pub, `og-${l}.png`)), 'image/png');
@@ -87,6 +89,7 @@ export function buildSite(): Site {
     h.setAttribute('data-page', page);
     h.setAttribute('data-dict', dictUrl[l]!);
     h.setAttribute('data-recorded', recorded);
+    h.setAttribute('data-recorded-terminal', recordedTerminal);
     // i18n
     for (const el of document.querySelectorAll('[data-i18n]')) { const v = d[el.getAttribute('data-i18n')!]; if (v !== undefined) el.textContent = v; }
     for (const el of document.querySelectorAll('[data-i18n-html]')) { const v = d[el.getAttribute('data-i18n-html')!]; if (v !== undefined) el.innerHTML = v; }
@@ -108,7 +111,7 @@ export function buildSite(): Site {
     const link = (id: string, label: string) => `<a href="${url(l, id)}"${en(id)}>${esc(label)}</a>`;
     const cols = document.createElement('div');
     cols.className = 'ft-cols';
-    cols.innerHTML = `<nav aria-label="${esc(d['ft.h.product']!)}"><p class="ft-h">${esc(d['ft.h.product']!)}</p>${link('software', d['nav.software']!)}${link('psp', d['nav.psp']!)}${link('demo', d['nav.demo']!)}${link('developers', d['nav.docs']!)}${link('security', d['ft.l.security']!)}${link('stripe', d['ft.l.stripe']!)}${link('status', d['ft.l.status']!)}</nav>`
+    cols.innerHTML = `<nav aria-label="${esc(d['ft.h.product']!)}"><p class="ft-h">${esc(d['ft.h.product']!)}</p>${link('software', d['nav.software']!)}${link('resellers', d['v11.nav.res']!)}${link('psp', d['nav.psp']!)}${link('demo', d['nav.demo']!)}${link('developers', d['nav.docs']!)}${link('security', d['ft.l.security']!)}${link('stripe', d['ft.l.stripe']!)}${link('status', d['ft.l.status']!)}</nav>`
       + `<nav aria-label="${esc(d['ft.h.protocols']!)}"><p class="ft-h">${esc(d['ft.h.protocols']!)}</p>${link('concert', 'Concert (Caisse-AP)')}${link('zvt', 'ZVT')}${link('nexo', 'nexo Retailer')}</nav>`
       + `<nav aria-label="${esc(d['ft.l.nav']!)}"><p class="ft-h">${esc(d['ft.l.nav']!)}</p>${link('legal', d['ft.l.notice']!)}${link('privacy', d['ft.l.privacy']!)}${link('accessibility', d['ft.l.a11y']!)}${link('contact', d['ft.l.contact']!)}</nav>`
       + (d['ft.en'] ? `<p class="ft-small ft-note">${esc(d['ft.l.security']!)}, ${esc(d['nav.docs']!)}, ${esc(d['ft.h.protocols']!)} : ${esc(d['ft.en']!)}</p>` : '');
@@ -150,7 +153,7 @@ export function buildSite(): Site {
     pages.push({ path, alternates });
   };
 
-  // ---------- 4 pages × 6 langues ----------
+  // ---------- 5 pages × 6 langues ----------
   for (const id of MAIN) {
     const alternates: Record<string, string> = Object.fromEntries(LANGS.map((l) => [l, mainUrl(l, id)]));
     alternates['x-default'] = id === 'home' ? '/' : mainUrl('en', id);

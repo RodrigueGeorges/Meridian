@@ -16,6 +16,7 @@
     "@meridian/engine": "workspace:*",
     "@meridian/modules": "workspace:*",
     "@meridian/store-pg": "workspace:*",
+    "@meridian/terminals": "workspace:*",
     "fastify": "^5.2.0",
     "zod": "^4.6.7"
   }

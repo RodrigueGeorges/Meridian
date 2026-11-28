@@ -13,6 +13,23 @@ const toMajor = (amount: number, currency: string) => amount / 10 ** (CURRENCIES
 const num = (v: unknown) => (typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? Number(v) : undefined);
 const reconciled = new Map<string, Set<string>>(); // POIID → références déjà rapprochées
 const failure = (condition: string, text: string) => ({ Result: 'Failure', ErrorCondition: condition, AdditionalResponse: text });
+// nexo : une demande est désignée par (SaleID, ServiceID) de son en-tête ; TransactionStatus la retrouve par ce couple.
+const services = new Map<string, string>(); // POIID|SaleID|ServiceID → référence
+const inFlight = new Map<string, string>(); // POIID → référence en cours d'autorisation (un seul paiement à la fois)
+type View = ReturnType<BridgeTarget['status']>;
+
+function paymentResponse(target: BridgeTarget, posId: string, reference: string, v: View, saleData?: Json): Json {
+  const r = target.receipt(posId, reference);
+  const ok = v.state === 'authorized';
+  return {
+    Response: ok ? { Result: 'Success' } : failure(v.state === 'cancelled' ? 'Aborted' : v.state === 'pending' ? 'InProgress' : 'Refusal', v.detail ?? v.state),
+    SaleData: saleData ?? { SaleTransactionID: { TransactionID: reference } },
+    POIData: { POITransactionID: { TransactionID: reference, TimeStamp: new Date().toISOString() } },
+    PaymentResult: ok
+      ? { AmountsResp: { Currency: v.currency, AuthorizedAmount: toMajor(v.amount, v.currency) }, PaymentInstrumentData: { CardData: { PaymentBrand: r?.brand, MaskedPAN: r?.last4 ? `XXXXXXXXXXXX${r.last4}` : undefined } } }
+      : undefined,
+  };
+}
 
 export async function handleNexo(body: Json, target: BridgeTarget, opts: { timeoutMs?: number } = {}): Promise<Json> {
   const req = body?.SaleToPOIRequest;
@@ -67,26 +84,23 @@ export async function handleNexo(body: Json, target: BridgeTarget, opts: { timeo
     const cur: string = p?.PaymentTransaction?.AmountsReq?.Currency;
     const amt = num(p?.PaymentTransaction?.AmountsReq?.RequestedAmount);
     if (!reference || !cur || amt === undefined || Number.isNaN(amt)) return { SaleToPOIResponse: { MessageHeader: header(h, category), PaymentResponse: { Response: failure('MessageFormat', 'TransactionID, Currency et RequestedAmount obligatoires') } } };
+    const busyWith = inFlight.get(posId);
+    if (busyWith && busyWith !== reference) return { SaleToPOIResponse: { MessageHeader: header(h, category), PaymentResponse: { Response: failure('Busy', `Paiement ${busyWith} en cours`) } } };
+    if (h.ServiceID) services.set(`${posId}|${h.SaleID}|${h.ServiceID}`, reference);
+    inFlight.set(posId, reference);
     try {
       await target.pay(posId, reference, toMinor(amt, cur), cur);
       const v = await target.waitFinal(posId, reference, opts.timeoutMs ?? 120_000);
-      const r = target.receipt(posId, reference);
-      const ok = v.state === 'authorized';
-      return {
-        SaleToPOIResponse: {
-          MessageHeader: header(h, category),
-          PaymentResponse: {
-            Response: ok ? { Result: 'Success' } : failure(v.state === 'cancelled' ? 'Aborted' : v.state === 'pending' ? 'InProgress' : 'Refusal', v.detail ?? v.state),
-            SaleData: p.SaleData,
-            POIData: { POITransactionID: { TransactionID: reference, TimeStamp: new Date().toISOString() } },
-            PaymentResult: ok
-              ? { AmountsResp: { Currency: cur, AuthorizedAmount: toMajor(v.amount, cur) }, PaymentInstrumentData: { CardData: { PaymentBrand: r?.brand, MaskedPAN: r?.last4 ? `XXXXXXXXXXXX${r.last4}` : undefined } } }
-              : undefined,
-          },
-        },
-      };
+      return { SaleToPOIResponse: { MessageHeader: header(h, category), PaymentResponse: paymentResponse(target, posId, reference, v, p.SaleData) } };
     } catch (e) {
       return { SaleToPOIResponse: { MessageHeader: header(h, category), PaymentResponse: { Response: failure('Busy', (e as Error).message) } } };
+    } finally {
+      // Le terminal reste occupé tant que l'autorisation n'est pas terminée, même si la caisse a cessé d'attendre.
+      let pending = false;
+      try { pending = target.status(posId, reference).state === 'pending'; } catch { /* rien n'a été créé */ }
+      const release = () => { if (inFlight.get(posId) === reference) inFlight.delete(posId); };
+      if (pending) void target.waitFinal(posId, reference, 10 * 60_000).catch(() => undefined).finally(release);
+      else release();
     }
   }
 
@@ -104,17 +118,30 @@ export async function handleNexo(body: Json, target: BridgeTarget, opts: { timeo
   }
 
   if (category === 'TransactionStatus') {
-    const reference: string = req.TransactionStatusRequest?.MessageReference?.SaleID ?? req.TransactionStatusRequest?.MessageReference?.ServiceID;
-    try {
-      const v = target.status(posId, reference);
-      return { SaleToPOIResponse: { MessageHeader: header(h, category), TransactionStatusResponse: { Response: v.state === 'pending' ? failure('InProgress', 'en cours') : { Result: 'Success' }, MeridianState: v.state } } };
-    } catch (e) {
-      return { SaleToPOIResponse: { MessageHeader: header(h, category), TransactionStatusResponse: { Response: failure('NotFound', (e as Error).message) } } };
-    }
+    // Réponse nexo : en cours → Failure/InProgress ; terminée → Success avec la réponse de paiement répétée.
+    const ref = req.TransactionStatusRequest?.MessageReference ?? {};
+    const reference: string | undefined = services.get(`${posId}|${ref.SaleID}|${ref.ServiceID}`) ?? ref.SaleID ?? ref.ServiceID;
+    let v: View | undefined;
+    try { v = reference ? target.status(posId, reference) : undefined; } catch { v = undefined; }
+    if (!v || !reference) return { SaleToPOIResponse: { MessageHeader: header(h, category), TransactionStatusResponse: { Response: failure('NotFound', 'Aucune demande avec cette référence') } } };
+    if (v.state === 'pending') return { SaleToPOIResponse: { MessageHeader: header(h, category), TransactionStatusResponse: { Response: failure('InProgress', 'en cours') } } };
+    return {
+      SaleToPOIResponse: {
+        MessageHeader: header(h, category),
+        TransactionStatusResponse: {
+          Response: { Result: 'Success' },
+          RepeatedMessageResponse: {
+            MessageHeader: { ...h, MessageCategory: 'Payment', MessageType: 'Response' },
+            RepeatedResponseMessageBody: { PaymentResponse: paymentResponse(target, posId, reference, v) },
+          },
+        },
+      },
+    };
   }
 
   if (category === 'Abort') {
-    const reference: string = req.AbortRequest?.MessageReference?.ServiceID;
+    const m = req.AbortRequest?.MessageReference ?? {};
+    const reference: string = services.get(`${posId}|${m.SaleID}|${m.ServiceID}`) ?? m.ServiceID;
     try {
       await target.cancel(posId, reference);
     } catch { /* un Abort n'a pas de réponse métier */ }

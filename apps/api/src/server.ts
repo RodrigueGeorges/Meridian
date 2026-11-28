@@ -1,6 +1,7 @@
 // API publique Meridian : 5 appels de paiement, points de vente, catalogue. Le moteur tourne dans le même process
 // (worker intégré) et reprend les paiements inachevés au démarrage.
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { runTerminalDemo, TERMINAL_DEMO_INCIDENTS } from '@meridian/terminals';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -316,11 +317,18 @@ export async function buildServer(o: ServerOptions) {
     });
   }
 
+  // ---------- Démo « terminal du magasin » (site public) : vrai agent, TPE nexo simulé ----------
+  app.post('/v1/demo/terminal', async (req, reply) => {
+    const { mode, incident } = z.object({ mode: z.enum(['local', 'cloud']), incident: z.enum(TERMINAL_DEMO_INCIDENTS) }).parse(req.body ?? {});
+    if (!(await allow('demo', req.ip, 12, 60_000))) return reply.code(429).send({ error: { code: 'rate_limited', message: 'Trop de démos, réessayez dans une minute' } });
+    return runTerminalDemo({ mode, incident });
+  });
+
   // ---------- Contact (site public) ----------
   const contacts: unknown[] = [];
   app.post('/v1/contact', async (req, reply) => {
     const body = z.object({
-      role: z.enum(['software', 'psp', 'other']),
+      role: z.enum(['software', 'reseller', 'psp', 'other']),
       name: z.string().trim().min(2).max(120),
       company: z.string().trim().min(2).max(160),
       email: z.string().trim().email().max(200),
@@ -613,7 +621,7 @@ export async function buildServer(o: ServerOptions) {
   });
   // ---------- Mesure d'audience sans cookie ni identifiant (exemptée de consentement) ----------
   // Compteurs agrégés par jour : page, action, langue, domaine de provenance. Purge après 25 mois.
-  const EVENTS = ['view', 'cta_software', 'cta_psp', 'demo', 'store_connect', 'contact'] as const;
+  const EVENTS = ['view', 'cta_software', 'cta_reseller', 'cta_psp', 'demo', 'demo_terminal', 'store_connect', 'contact'] as const;
   const knownPaths = new Set(site.pages.map((pg) => pg.path));
   const memStats = new Map<string, number>();
   const Beacon = z.object({

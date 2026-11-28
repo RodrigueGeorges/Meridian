@@ -75,9 +75,15 @@ for (const mode of ['memory', 'postgres'] as const) {
       expect((await fetch(`${base}/v1/demo/run`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"scenario":"rm -rf"}' })).status).toBe(400);
     });
 
+    it('démo terminal : vrai agent, TPE simulé, réponse perdue sans double ordre', async () => {
+      const r = await (await fetch(`${base}/v1/demo/terminal`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"mode":"cloud","incident":"lost_reply"}' })).json();
+      expect(r).toMatchObject({ state: 'authorized', orders: 1, debits: 1 });
+      expect((await fetch(`${base}/v1/demo/terminal`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"mode":"x","incident":"none"}' })).status).toBe(400);
+    });
+
     it('contact : enregistre une demande valide, refuse un e-mail invalide et le champ piège', async () => {
       const post = (b: unknown) => fetch(`${base}/v1/contact`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) });
-      const ok = { role: 'software', name: 'Ada Martin', company: 'Caisse Lab', email: 'ada@caisselab.example', country: 'FR', lang: 'fr' };
+      const ok = { role: 'reseller', name: 'Ada Martin', company: 'Caisse Lab', email: 'ada@caisselab.example', country: 'FR', lang: 'fr' };
       expect((await post(ok)).status).toBe(201);
       expect((await post({ ...ok, email: 'pas-un-email' })).status).toBe(400);
       expect((await post({ ...ok, website: 'http://spam' })).status).toBe(400);
@@ -193,7 +199,7 @@ for (const mode of ['memory', 'postgres'] as const) {
       expect(de).not.toContain('data-view="home"');
       const css = de.match(/href="(\/assets\/site\.[0-9a-f]+\.css)"/)![1]!;
       expect((await fetch(`${base}${css}`)).headers.get('cache-control')).toContain('immutable');
-      for (const p of ['/fr/editeurs/', '/en/pos-software/', '/it/demo/', '/nl/psp/', '/fr/securite/', '/en/developers/', '/fr/contact/', '/en/zvt-protocol/', '/fr/mentions-legales/', '/en/privacy/']) {
+      for (const p of ['/fr/editeurs/', '/fr/distributeurs/', '/de/haendler/', '/en/pos-software/', '/it/demo/', '/nl/psp/', '/fr/securite/', '/en/developers/', '/fr/contact/', '/en/zvt-protocol/', '/fr/mentions-legales/', '/en/privacy/']) {
         expect((await fetch(`${base}${p}`)).status, p).toBe(200);
       }
       const root = await fetch(`${base}/`, { redirect: 'manual', headers: { 'accept-language': 'es-ES,es;q=0.9' } });
@@ -203,7 +209,7 @@ for (const mode of ['memory', 'postgres'] as const) {
       expect((await fetch(`${base}/fr/nexistepas/`, { headers: { accept: 'text/html' } })).status).toBe(404);
       expect((await fetch(`${base}/portal/console.html`)).status).toBe(200);
       const map = await (await fetch(`${base}/sitemap.xml`)).text();
-      expect(map.match(/<url>/g)!.length).toBe(46);
+      expect(map.match(/<url>/g)!.length).toBe(52);
       expect(await (await fetch(`${base}/robots.txt`)).text()).toContain(`Sitemap: ${base}/sitemap.xml`);
       expect(await (await fetch(`${base}/.well-known/security.txt`)).text()).toMatch(/^Contact: mailto:security@/);
     });

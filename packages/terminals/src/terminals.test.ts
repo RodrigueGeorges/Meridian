@@ -79,3 +79,91 @@ describe('service terminal de l\'agent', () => {
     await wait(s, 'B-1');
   });
 });
+
+describe('pilote nexo : ce que la caisse n\'a plus à gérer', () => {
+  type Body = { SaleToPOIRequest: { MessageHeader: { MessageCategory: string } } };
+  const category = (init?: RequestInit) => (JSON.parse(String(init?.body)) as Body).SaleToPOIRequest.MessageHeader.MessageCategory;
+
+  it('réponse de paiement perdue : TransactionStatus répété jusqu\'à l\'issue, un seul débit', async () => {
+    const slow = await startTerminalSims({ delayMs: 300 });
+    try {
+      // La demande part au terminal, mais la caisse ne reçoit jamais la réponse.
+      const lossy: typeof fetch = async (url, init) => {
+        if (category(init) !== 'Payment') return fetch(url, init);
+        void fetch(url, init).catch(() => undefined);
+        await new Promise((r) => setTimeout(r, 30));
+        throw new Error('socket hang up');
+      };
+      const d = new NexoDriver({ url: slow.nexo.url, poiId: 'tpe', fetcher: lossy, pollMs: 50, recoverMs: 5000 });
+      const res = await d.pay({ reference: 'NX-LOST', amount: 1890, currency: 'EUR' });
+      expect(res.state).toBe('authorized');
+      expect(slow.nexo.sim.debits()).toBe(1);
+    } finally { await slow.close(); }
+  });
+
+  it('demande jamais arrivée : NotFound = refus certain, aucun débit', async () => {
+    const dropped: typeof fetch = async (url, init) => {
+      if (category(init) === 'Payment') throw new Error('socket hang up');
+      return fetch(url, init);
+    };
+    const before = sims.nexo.sim.debits();
+    const d = new NexoDriver({ url: sims.nexo.url, poiId: 'tpe', fetcher: dropped, pollMs: 20 });
+    expect(await d.pay({ reference: 'NX-NEVER', amount: 700, currency: 'EUR' })).toMatchObject({ state: 'declined', detail: 'terminal_not_received' });
+    expect(sims.nexo.sim.debits() - before).toBe(0);
+  });
+
+  it('terminal occupé par une autre caisse : refus certain « terminal_busy », l\'autre paiement continue', async () => {
+    const slow = await startTerminalSims({ delayMs: 300 });
+    try {
+      const a = new NexoDriver({ url: slow.nexo.url, poiId: 'tpe', saleId: 'CAISSE-A' });
+      const s = new TerminalService(new NexoDriver({ url: slow.nexo.url, poiId: 'tpe', saleId: 'CAISSE-B' }));
+      const first = a.pay({ reference: 'NX-A', amount: 1000, currency: 'EUR' });
+      await new Promise((r) => setTimeout(r, 50));
+      await s.handle('POST', '/terminal/payments', { reference: 'NX-B', amount: 2000, currency: 'EUR' });
+      await new Promise((r) => setTimeout(r, 50));
+      expect((await s.handle('GET', '/terminal/payments/NX-B', undefined)).body).toMatchObject({ state: 'declined', detail: 'terminal_busy' });
+      expect((await first).state).toBe('authorized');
+      expect(slow.nexo.sim.debits()).toBe(1);
+    } finally { await slow.close(); }
+  });
+
+  it('session : Login avant le premier ordre, rouverte si le terminal a redémarré', async () => {
+    let logged = false, logins = 0;
+    const strict: typeof fetch = async (url, init) => {
+      const cat = category(init);
+      if (cat === 'Login') { logged = true; logins++; }
+      if (cat === 'Payment' && !logged) {
+        const h = (JSON.parse(String(init?.body)) as { SaleToPOIRequest: { MessageHeader: Record<string, string> } }).SaleToPOIRequest.MessageHeader;
+        return new Response(JSON.stringify({ SaleToPOIResponse: { MessageHeader: { ...h, MessageType: 'Response' }, PaymentResponse: { Response: { Result: 'Failure', ErrorCondition: 'LoggedOut' } } } }));
+      }
+      return fetch(url, init);
+    };
+    const d = new NexoDriver({ url: sims.nexo.url, poiId: 'tpe', session: true, fetcher: strict });
+    expect((await d.pay({ reference: 'NX-S1', amount: 500, currency: 'EUR' })).state).toBe('authorized');
+    logged = false; // le terminal redémarre et oublie la session
+    expect((await d.pay({ reference: 'NX-S2', amount: 600, currency: 'EUR' })).state).toBe('authorized');
+    expect(logins).toBe(2);
+  });
+
+  it('mauvais terminal (POIID inattendu) : détecté avant tout paiement', async () => {
+    const d = new NexoDriver({ url: sims.nexo.url, poiId: 'tpe-caisse-2', session: true, fetcher: async (url, init) => {
+      const r = await fetch(url, init);
+      const j = await r.json() as { SaleToPOIResponse: { MessageHeader: { POIID: string } } };
+      j.SaleToPOIResponse.MessageHeader.POIID = 'tpe-caisse-1';
+      return new Response(JSON.stringify(j));
+    } });
+    await expect(d.pay({ reference: 'NX-SWAP', amount: 500, currency: 'EUR' })).rejects.toMatchObject({ beforeSend: true, code: 'terminal_mismatch' });
+    expect(await d.health()).toBe(false);
+  });
+});
+
+describe('démo terminal du site', () => {
+  it('réponse perdue : un seul ordre au TPE, un seul débit ; terminal occupé : aucun débit', async () => {
+    const { runTerminalDemo } = await import('./demo.ts');
+    const lost = await runTerminalDemo({ mode: 'cloud', incident: 'lost_reply', cardMs: 200 });
+    expect(lost).toMatchObject({ state: 'authorized', orders: 1, debits: 1 });
+    expect(lost.steps.map((s) => s.kind)).toContain('reply_lost');
+    const busy = await runTerminalDemo({ mode: 'local', incident: 'busy', cardMs: 300 });
+    expect(busy).toMatchObject({ state: 'declined', detail: 'terminal_busy', debits: 0 });
+  });
+});

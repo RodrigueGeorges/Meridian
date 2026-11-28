@@ -29,7 +29,7 @@ export interface TerminalDriver {
 
 /** Erreur de liaison avec le terminal : l'issue est inconnue si la demande a pu partir. */
 export class LinkError extends Error {
-  constructor(message: string, public readonly beforeSend: boolean) {
+  constructor(message: string, public readonly beforeSend: boolean, public readonly code?: string) {
     super(message);
   }
 }

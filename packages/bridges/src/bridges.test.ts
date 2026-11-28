@@ -169,7 +169,7 @@ describe('Passerelle nexo Retailer', () => {
     expect(again.SaleToPOIResponse.PaymentResponse.Response.Result).toBe('Success');
     expect(h.sims.debits()).toBe(1);
     const st = await handleNexo({ SaleToPOIRequest: { MessageHeader: hdr(h.posId, 'TransactionStatus'), TransactionStatusRequest: { MessageReference: { SaleID: 'NEXO-1' } } } }, t);
-    expect(st.SaleToPOIResponse.TransactionStatusResponse.MeridianState).toBe('authorized');
+    expect(st.SaleToPOIResponse.TransactionStatusResponse.RepeatedMessageResponse.RepeatedResponseMessageBody.PaymentResponse.Response.Result).toBe('Success');
     const rev = await handleNexo({ SaleToPOIRequest: { MessageHeader: hdr(h.posId, 'Reversal'), ReversalRequest: { OriginalPOITransaction: { POITransactionID: { TransactionID: 'NEXO-1' } } } } }, t);
     expect(rev.SaleToPOIResponse.ReversalResponse.Response.Result).toBe('Success');
     expect(rev.SaleToPOIResponse.ReversalResponse.ReversedAmount).toBe(24.5);

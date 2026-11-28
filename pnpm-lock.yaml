@@ -81,6 +81,9 @@ importers:
       '@meridian/store-pg':
         specifier: workspace:*
         version: link:../../packages/store-pg
+      '@meridian/terminals':
+        specifier: workspace:*
+        version: link:../../packages/terminals
       fastify:
         specifier: ^5.2.0
         version: 5.12.8
