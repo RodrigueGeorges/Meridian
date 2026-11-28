@@ -53,6 +53,8 @@ const { app } = await buildServer({
   securityContact: env.SECURITY_CONTACT,
   metricsToken: env.METRICS_TOKEN,
   contactRetentionDays: env.CONTACT_RETENTION_DAYS ? Number(env.CONTACT_RETENTION_DAYS) : undefined,
+  drainMs: env.DRAIN_MS ? Number(env.DRAIN_MS) : undefined,
+  dbPoolMax: env.DATABASE_POOL_MAX ? Number(env.DATABASE_POOL_MAX) : undefined,
   engine: (env.SCAN_MS || env.STUCK_AFTER_MS) ? { scanMs: env.SCAN_MS ? Number(env.SCAN_MS) : undefined, stuckAfterMs: env.STUCK_AFTER_MS ? Number(env.STUCK_AFTER_MS) : undefined } : undefined,
   bridges: {
     host: env.BRIDGE_HOST,

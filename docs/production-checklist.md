@@ -1,7 +1,7 @@
 # Checklist de mise en production Meridian
 
 Ce qui est fait dans le code (lots 1 et 2) et ce qui reste à faire avec des accès externes.
-ADR des choix : `docs/adr/002-production-readiness.md`.
+ADR des choix : `docs/adr/002-production-readiness.md` · montée en charge : `docs/mise-en-echelle.md`.
 
 ## Mise en ligne en une commande
 

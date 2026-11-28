@@ -3,6 +3,8 @@ import { createHmac } from 'node:crypto';
 import http from 'node:http';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startSims } from '@meridian/sim';
+import { startTerminalSims, ZvtDriver } from '@meridian/terminals';
+import { startAgent } from '@meridian/edge';
 import { pg } from '@meridian/store-pg';
 import { buildServer } from './server.ts';
 
@@ -104,6 +106,26 @@ describe.skipIf(!baseUrl)('Cluster PostgreSQL : deux instances d’API', () => {
     const fin = await call(1, 'GET', `/v1/payments/${ref}?posId=pos_demo_ES&waitMs=6000`);
     expect(fin.json.state).toBe('cancelled');
     sims.stripe.faults.autoPresentMs = 150;
+  });
+
+  it('relais edge inter-instances : agent sur B, paiement piloté par A via NOTIFY', async () => {
+    const tpe = await startTerminalSims();
+    const agent = await startAgent({ driver: new ZvtDriver({ host: '127.0.0.1', port: tpe.zvt.port }), local: false, cloud: { url: urls[1]!, apiKey: KEY, agentId: 'bus-1' } });
+    try {
+      await agent.ready;
+      const pos = (await call(0, 'POST', '/v1/pos', { label: 'Magasin bus', country: 'DE' })).json as { id: string };
+      const bind = await call(0, 'PUT', `/v1/pos/${pos.id}/psp`, { primary: { moduleId: 'edge-terminal', config: { agentId: 'bus-1' } } });
+      expect(bind.status).toBe(200);
+      const before = tpe.zvt.sim.debits();
+      const ref = `CL-EDGE-${Date.now()}`;
+      expect((await call(0, 'POST', '/v1/payments', { posId: pos.id, reference: ref, amount: 1200, currency: 'EUR' })).status).toBe(201);
+      const fin = await call(0, 'GET', `/v1/payments/${ref}?posId=${pos.id}&waitMs=15000`);
+      expect(fin.json.state, JSON.stringify(fin.json)).toBe('authorized');
+      expect(tpe.zvt.sim.debits() - before).toBe(1);
+    } finally {
+      await agent.close().catch(() => undefined);
+      await tpe.close();
+    }
   });
 
   it('A tombe en plein paiement : B reprend (verrou libéré), un seul débit', async () => {

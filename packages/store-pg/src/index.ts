@@ -15,13 +15,14 @@ export class PgJournalStore implements JournalStore {
       [e.seq, e.ts, e.posId, e.reference, e.type, JSON.stringify(e.data), e.prev, e.hash, e.sig],
     );
   }
-  /** Ajout chaîné sûr entre instances : verrou transactionnel global, garde évaluée dans la transaction, puis insertion. */
-  async appendChained(build: (last: JournalEntry | undefined) => JournalEntry, guard?: import('@meridian/engine').AppendGuard): Promise<JournalEntry> {
+  /** Ajout chaîné sûr entre instances : verrou transactionnel PAR POS (deux terminaux écrivent en
+   *  parallèle — la sérialisation n'a lieu qu'à l'intérieur d'une même chaîne), garde dans la transaction. */
+  async appendChained(posId: string, build: (last: JournalEntry | undefined) => JournalEntry, guard?: import('@meridian/engine').AppendGuard): Promise<JournalEntry> {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      await client.query('SELECT pg_advisory_xact_lock(7426001)');
-      const r = await client.query('SELECT * FROM journal ORDER BY seq DESC LIMIT 1');
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`journal:${posId}`]);
+      const r = await client.query('SELECT * FROM journal WHERE pos_id=$1 ORDER BY seq DESC LIMIT 1', [posId]);
       const e = build(r.rows[0] ? this.map(r.rows[0]) : undefined);
       if (guard) await this.checkGuard(client, e, guard);
       await client.query(
@@ -70,12 +71,14 @@ export class PgJournalStore implements JournalStore {
       type: r.type as JournalEntry['type'], data: r.data as Record<string, unknown>, prev: r.prev as string, hash: r.hash as string, sig: r.sig as string,
     };
   }
-  async last() {
-    const r = await this.pool.query('SELECT * FROM journal ORDER BY seq DESC LIMIT 1');
+  async last(posId?: string) {
+    const r = posId === undefined
+      ? await this.pool.query('SELECT * FROM journal ORDER BY ts DESC, seq DESC LIMIT 1')
+      : await this.pool.query('SELECT * FROM journal WHERE pos_id=$1 ORDER BY seq DESC LIMIT 1', [posId]);
     return r.rows[0] ? this.map(r.rows[0]) : undefined;
   }
   async all() {
-    const r = await this.pool.query('SELECT * FROM journal ORDER BY seq');
+    const r = await this.pool.query('SELECT * FROM journal ORDER BY pos_id, seq');
     return r.rows.map((x) => this.map(x));
   }
   async byReference(posId: string, reference: string) {
@@ -89,6 +92,8 @@ export class PgJournalStore implements JournalStore {
 export class PgCluster {
   private client?: pg.PoolClient;
   private store: PgJournalStore;
+  /** Les requêtes du client de verrous sont sérialisées : pg déprécie les query parallèles sur un client. */
+  private chain: Promise<unknown> = Promise.resolve();
   /** Incrémentée quand la connexion tenant les verrous est perdue : tous les verrous qu'elle tenait sont morts. */
   epoch = 0;
   constructor(private readonly pool: pg.Pool) {
@@ -110,11 +115,16 @@ export class PgCluster {
     }
     return this.client;
   }
+  /** Exécute `op` sur le client de verrous, en file : tryClaim/release concurrents partagent la connexion. */
+  private queued<T>(op: (c: pg.PoolClient) => Promise<T>): Promise<T> {
+    const p = this.chain.then(() => this.lockClient()).then(op);
+    this.chain = p.then(() => undefined, () => undefined);
+    return p;
+  }
   /** Ne rejette pas : en cas d'erreur, le client est invalidé (epoch++) et le claim est refusé. */
   async tryClaim(posId: string, reference: string) {
     try {
-      const c = await this.lockClient();
-      const r = await c.query('SELECT pg_try_advisory_lock(hashtext($1)) AS ok', [`${posId}|${reference}`]);
+      const r = await this.queued((c) => c.query('SELECT pg_try_advisory_lock(hashtext($1)) AS ok', [`${posId}|${reference}`]));
       return Boolean(r.rows[0]?.ok);
     } catch {
       if (this.client) this.invalidate(this.client);
@@ -123,8 +133,7 @@ export class PgCluster {
   }
   async release(posId: string, reference: string) {
     try {
-      const c = await this.lockClient();
-      await c.query('SELECT pg_advisory_unlock(hashtext($1))', [`${posId}|${reference}`]);
+      await this.queued((c) => c.query('SELECT pg_advisory_unlock(hashtext($1))', [`${posId}|${reference}`]));
     } catch (e) {
       if (this.client) this.invalidate(this.client);
       throw e;

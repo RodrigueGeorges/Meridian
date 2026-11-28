@@ -20,6 +20,7 @@
     "demo": "tsx tools/demo/main.ts",
     "caisse": "tsx tools/demo/caisse.ts",
     "tpe": "tsx tools/demo/tpe.ts",
+    "bench": "tsx tools/bench.ts",
     "edge": "tsx apps/edge/src/main.ts",
     "site:audit": "cd apps/portal && tsx audit.ts",
     "module:draft": "tsx tools/ai/module-draft.ts"

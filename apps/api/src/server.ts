@@ -1,6 +1,6 @@
 // API publique Meridian : 5 appels de paiement, points de vente, catalogue. Le moteur tourne dans le même process
 // (worker intégré) et reprend les paiements inachevés au démarrage.
-import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { runTerminalDemo, TERMINAL_DEMO_INCIDENTS } from '@meridian/terminals';
 import { AiFailed, AiUnavailable, Current, documentText, estimate, statementDemoManual, explainPayment, fromStatement, llmFromEnv, Profile, profileFromText, readStatement, UnreadableDocument, type Llm } from '@meridian/ai';
 import { readFileSync } from 'node:fs';
@@ -41,6 +41,8 @@ export interface ServerOptions {
   webhookSecret?: string;
   /** Délai maximal d'attente des paiements en cours à l'arrêt (défaut 20 s). */
   drainMs?: number;
+  /** Taille maximale du pool de connexions PostgreSQL (défaut pg : 10). */
+  dbPoolMax?: number;
   demoSeed?: { stripeUrl: string; secoursUrl: string };
   engine?: { pollMs?: number; retryMs?: number; payTimeoutMs?: number; scanMs?: number; httpTimeoutMs?: number; stuckAfterMs?: number };
   logger?: boolean;
@@ -110,6 +112,7 @@ export async function buildServer(o: ServerOptions) {
   let keys: KeyStore;
   let pool: pg.Pool | undefined;
   let cluster: PgCluster | undefined;
+  let edgeBusStop: (() => Promise<void>) | undefined;
   /** URL webhook d'une organisation (repli sur le webhook global), et sa mise à jour. */
   let orgWebhookUrl: (orgId: string) => Promise<string | undefined>;
   let setOrgWebhook: (orgId: string, url: string | null) => Promise<void>;
@@ -123,10 +126,50 @@ export async function buildServer(o: ServerOptions) {
     if (pooled && !o.allowPooledDatabase) {
       throw new Error('DATABASE_URL ressemble à un pooler en mode transaction (-pooler, port 6543 ou pgbouncer=true) : les verrous consultatifs de session exigent une connexion directe. Utilisez l\'URL directe ou définissez DATABASE_POOLED_OK=true pour forcer.');
     }
-    pool = new pg.Pool({ connectionString: o.databaseUrl });
+    pool = new pg.Pool({ connectionString: o.databaseUrl, max: o.dbPoolMax });
     await migrate(pool);
     store = new PgJournalStore(pool);
     cluster = new PgCluster(pool);
+    // Bus inter-instances du relais edge (LISTEN/NOTIFY) : connexion dédiée hors pool — un agent
+    // rattaché à l'instance A reste pilotable par une requête arrivée sur l'instance B.
+    {
+      let closed = false;
+      let client: pg.Client | undefined;
+      // Toutes les requêtes de la connexion LISTEN passent par cette chaîne : pg déprécie les
+      // requêtes parallèles sur un même client (keepalive vs pg_notify).
+      let chain: Promise<unknown> = Promise.resolve();
+      const run = (sql: string, params?: string[]) => {
+        const r = chain.then(() => {
+          if (!client) throw new Error('bus edge indisponible');
+          return client.query(sql, params);
+        });
+        chain = r.then(() => undefined, () => undefined);
+        return r;
+      };
+      const reconnect = async (): Promise<void> => {
+        if (closed) return;
+        try {
+          const c = new pg.Client({ connectionString: o.databaseUrl });
+          c.on('notification', (n) => edge.handleNotify(n.channel ?? '', n.payload));
+          c.on('error', () => undefined); // 'end' déclenchera la reconnexion
+          c.on('end', () => { if (client === c) client = undefined; void reconnect(); });
+          await c.connect();
+          await c.query('LISTEN edge_cmd');
+          await c.query('LISTEN edge_resp');
+          client = c;
+        } catch {
+          setTimeout(reconnect, 2000).unref();
+        }
+      };
+      await reconnect();
+      const keepalive = setInterval(() => void run('SELECT 1').catch(() => undefined), 30_000);
+      keepalive.unref();
+      edge.setBus({
+        instanceId: randomUUID(),
+        publish: async (ch, payload) => { await run('SELECT pg_notify($1,$2)', [ch, payload]); },
+      });
+      edgeBusStop = async () => { closed = true; clearInterval(keepalive); await client?.end().catch(() => undefined); };
+    }
     repo = new PgPosRepo(pool, new SecretBox(o.masterKey, { version: o.masterKeyVersion, previous: o.masterKeysPrevious }));
     const p = pool;
     keys = {
@@ -736,7 +779,8 @@ export async function buildServer(o: ServerOptions) {
 
   // ---------- Observabilité minimale (même authentification que /v1/audit) ----------
   // Pour un ping uptime externe : santé publique sur /health, compteurs d'exploitation ici.
-  app.get('/v1/ops', async (req) => {
+  // ?format=prometheus → exposition texte (scrapable : bearer_token = clé d'API).
+  app.get('/v1/ops', async (req, reply) => {
     await authed(req);
     const stats = engine.stats();
     const db = pool ? await Promise.race([
@@ -746,7 +790,25 @@ export async function buildServer(o: ServerOptions) {
     const journalCount = pool
       ? Number((await pool.query('SELECT count(*)::int AS n FROM journal').catch(() => ({ rows: [{ n: -1 }] }))).rows[0]?.n ?? -1)
       : (await store.all()).length;
-    return { uptime: Math.round(process.uptime()), ...stats, edges: edge.count(), journalCount, db };
+    const data = { uptime: Math.round(process.uptime()), ...stats, edges: edge.count(), journalCount, db };
+    const { format } = z.object({ format: z.enum(['json', 'prometheus']).default('json') }).parse(req.query);
+    if (format !== 'prometheus') return data;
+    const g = (name: string, help: string, v: number) => `# HELP ${name} ${help}\n# TYPE ${name} gauge\n${name} ${v}`;
+    const lines = [
+      g('meridian_uptime_seconds', 'Secondes depuis le démarrage', data.uptime),
+      g('meridian_payments_pending', 'Paiements en cours', stats.pending),
+      g('meridian_payments_stuck', 'Paiements bloqués sans issue (alerte)', stats.stuck),
+      g('meridian_edge_agents', 'Agents edge connectés à cette instance', data.edges),
+      g('meridian_journal_events', 'Événements journalisés (toutes chaînes)', data.journalCount),
+      g('meridian_db_up', 'Base de données joignable', db === 'up' ? 1 : 0),
+    ];
+    if (pool) lines.push(
+      g('meridian_db_pool_total', 'Connexions PostgreSQL ouvertes', pool.totalCount),
+      g('meridian_db_pool_idle', 'Connexions PostgreSQL inactives', pool.idleCount),
+      g('meridian_db_pool_waiting', 'Requêtes en attente d\'une connexion (saturé si > 0)', pool.waitingCount),
+      g('meridian_memory_rss_bytes', 'Mémoire résidente du processus', process.memoryUsage().rss),
+    );
+    return reply.type('text/plain; version=0.0.4').send(`${lines.join('\n')}\n`);
   });
 
   // Jeton de connexion pour le SDK du PSP sur l'appareil (Tap to Pay). Le secret du PSP ne quitte jamais Meridian.
@@ -918,6 +980,7 @@ export async function buildServer(o: ServerOptions) {
     if (webhookTimer) clearInterval(webhookTimer);
     clearInterval(purgeTimer);
     await cluster?.close();
+    await edgeBusStop?.(); // connexion LISTEN dédiée — hors pool, à fermer explicitement
     edge.close(); // termine les WebSockets des agents (elles bloqueraient app.close indéfiniment)
     // Idem pour les passerelles TCP : close() n'attend pas les sockets ouvertes, on les détruit.
     for (const s of netServers) (s as NetServer & { closeAll?: () => void }).closeAll?.();

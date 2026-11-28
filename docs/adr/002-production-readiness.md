@@ -12,8 +12,10 @@ config, sécurité réseau, CI et documentation (lot 2).
 ### Lot 1 — robustesse du code
 
 1. **Gardes d'ajout atomiques** : la création d'un paiement et les remboursements s'évaluent
-   en SQL dans la transaction d'ajout au journal, sous verrou transactionnel global
-   (`pg_advisory_xact_lock`) — sûr entre instances, pas de course possible.
+   en SQL dans la transaction d'ajout au journal, sous verrou transactionnel **par point de
+   vente** (`pg_advisory_xact_lock(hashtext('journal:'||pos_id))`) — sûr entre instances, et
+   deux terminaux ne se bloquent jamais l'un l'autre (chaîne `seq` shardée par `pos_id`,
+   migration 011).
 2. **Remboursements pré-journalisés** : `refund_pending` écrit avant l'appel PSP, cumul plafonné
    au montant payé ; une réponse perdue se reprend avec le même numéro sans double remboursement.
 3. **Verrous de cluster par paiement** : un seul pilote par paiement (verrou consultatif de session,
@@ -49,8 +51,10 @@ config, sécurité réseau, CI et documentation (lot 2).
 
 ## Conséquences
 
-- Le relais edge reste mono-instance (connexions WebSocket en mémoire) : en production,
-  une seule instance reçoit les agents, ou réseau privé requis — point ouvert.
+- Le relais edge est multi-instance : les connexions WebSocket restent en mémoire, mais une
+  requête reçue par l'instance B pour un agent rattaché à A est relayée par PostgreSQL
+  LISTEN/NOTIFY (`edge_cmd`/`edge_resp`, payload < 8 Ko) — résolu, plus de restriction
+  de scaling pour les agents.
 - Le secret de webhook est global ; `secret` par org est accepté mais ignoré — point ouvert.
 - Validation des URLs de webhook littérale sur le hostname, sans épinglage DNS — rebinding
   DNS hors périmètre.

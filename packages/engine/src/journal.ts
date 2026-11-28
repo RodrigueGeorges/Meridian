@@ -8,11 +8,12 @@ export type AppendGuard = { posIdle: true } | { refundCap: number };
 
 export interface JournalStore {
   append(entry: JournalEntry): Promise<void>;
-  last(): Promise<JournalEntry | undefined>;
+  last(posId?: string): Promise<JournalEntry | undefined>;
   all(): Promise<JournalEntry[]>;
   byReference(posId: string, reference: string): Promise<JournalEntry[]>;
-  /** Stockage partagé (PostgreSQL) : construit et insère l'entrée sous verrou, à partir de la dernière en base. */
-  appendChained?(build: (last: JournalEntry | undefined) => JournalEntry, guard?: AppendGuard): Promise<JournalEntry>;
+  /** Stockage partagé (PostgreSQL) : construit et insère l'entrée sous verrou de sa chaîne (par posId),
+   *  à partir de la dernière entrée DE CE POS. Deux POS différents écrivent en parallèle. */
+  appendChained?(posId: string, build: (last: JournalEntry | undefined) => JournalEntry, guard?: AppendGuard): Promise<JournalEntry>;
 }
 
 export const GENESIS = '0'.repeat(64);
@@ -64,7 +65,8 @@ export function checkGuard(entries: JournalEntry[], input: JournalEntryInput, gu
 
 export class Journal {
   private tail: Promise<unknown> = Promise.resolve();
-  private head?: { seq: number; hash: string };
+  /** Tête de chaîne par POS : chaque terminal a sa chaîne (prev = entrée précédente du même POS). */
+  private heads = new Map<string, { seq: number; hash: string }>();
   private readonly keyId: string;
   private readonly previous: Record<string, string>;
 
@@ -85,25 +87,27 @@ export class Journal {
     return this.previous[kid];
   }
 
-  /** Ajout sérialisé : une seule écriture à la fois pour garder la chaîne cohérente. */
+  /** Ajout sérialisé par chaîne de POS : en mémoire/fichier toutes les écritures restent en file,
+   *  en PostgreSQL seuls les ajouts du même POS se serialisent (verrou advisory par posId). */
   append(input: JournalEntryInput, guard?: AppendGuard): Promise<JournalEntry> {
     const build = (last: JournalEntry | undefined): JournalEntry => {
       const base = { ...input, seq: (last?.seq ?? 0) + 1, ts: new Date().toISOString(), prev: last?.hash ?? GENESIS };
       const hash = hashEntry(base);
       return { ...base, hash, sig: this.sign(hash) };
     };
-    if (this.store.appendChained) return this.store.appendChained(build, guard);
+    if (this.store.appendChained) return this.store.appendChained(input.posId, build, guard);
     const run = async () => {
       if (guard) checkGuard(await this.store.all(), input, guard);
-      if (!this.head) {
-        const last = await this.store.last();
-        this.head = last ? { seq: last.seq, hash: last.hash } : { seq: 0, hash: GENESIS };
+      let head = this.heads.get(input.posId);
+      if (!head) {
+        const last = await this.store.last(input.posId);
+        head = last ? { seq: last.seq, hash: last.hash } : { seq: 0, hash: GENESIS };
       }
-      const base = { ...input, seq: this.head.seq + 1, ts: new Date().toISOString(), prev: this.head.hash };
+      const base = { ...input, seq: head.seq + 1, ts: new Date().toISOString(), prev: head.hash };
       const hash = hashEntry(base);
       const entry: JournalEntry = { ...base, hash, sig: this.sign(hash) };
       await this.store.append(entry);
-      this.head = { seq: entry.seq, hash };
+      this.heads.set(input.posId, { seq: entry.seq, hash });
       return entry;
     };
     const p = this.tail.then(run, run);
@@ -118,18 +122,25 @@ export class Journal {
     return this.store.byReference(posId, reference);
   }
 
+  /** Vérifie chaque chaîne de POS : continuité prev (première entrée du POS = GENESIS),
+   *  hachage canonique et signature de chaque entrée. */
   async verify(): Promise<{ ok: boolean; count: number; brokenAt?: number }> {
     const entries = await this.store.all();
-    let prev = GENESIS;
-    for (const e of entries) {
-      const { hash, sig, ...rest } = e;
-      // « kid:hex » : signature de la clé de ce kid ; hex brut : kid '1' (format historique).
-      const kid = sig.includes(':') ? sig.split(':', 1)[0]! : '1';
-      const raw = sig.includes(':') ? sig.slice(kid.length + 1) : sig;
-      const k = this.keyFor(kid);
-      const ok = !!k && createHmac('sha256', k).update(hash).digest('hex') === raw;
-      if (e.prev !== prev || hashEntry(rest) !== hash || !ok) return { ok: false, count: entries.length, brokenAt: e.seq };
-      prev = hash;
+    const byPos = new Map<string, JournalEntry[]>();
+    for (const e of entries) (byPos.get(e.posId) ?? byPos.set(e.posId, []).get(e.posId)!).push(e);
+    for (const chain of byPos.values()) {
+      chain.sort((a, b) => a.seq - b.seq);
+      let prev = GENESIS;
+      for (const e of chain) {
+        const { hash, sig, ...rest } = e;
+        // « kid:hex » : signature de la clé de ce kid ; hex brut : kid '1' (format historique).
+        const kid = sig.includes(':') ? sig.split(':', 1)[0]! : '1';
+        const raw = sig.includes(':') ? sig.slice(kid.length + 1) : sig;
+        const k = this.keyFor(kid);
+        const ok = !!k && createHmac('sha256', k).update(hash).digest('hex') === raw;
+        if (e.prev !== prev || hashEntry(rest) !== hash || !ok) return { ok: false, count: entries.length, brokenAt: e.seq };
+        prev = hash;
+      }
     }
     return { ok: true, count: entries.length };
   }
@@ -140,8 +151,8 @@ export class MemoryStore implements JournalStore {
   async append(e: JournalEntry) {
     this.entries.push(structuredClone(e));
   }
-  async last() {
-    return this.entries.at(-1);
+  async last(posId?: string) {
+    return posId === undefined ? this.entries.at(-1) : [...this.entries].reverse().find((e) => e.posId === posId);
   }
   async all() {
     return this.entries.map((e) => structuredClone(e));
@@ -167,8 +178,9 @@ export class JsonlStore implements JournalStore {
       closeSync(fd);
     }
   }
-  async last() {
-    return this.read().at(-1);
+  async last(posId?: string) {
+    const es = this.read();
+    return posId === undefined ? es.at(-1) : [...es].reverse().find((e) => e.posId === posId);
   }
   async all() {
     return this.read();
